@@ -240,7 +240,7 @@ public class ProductService {
     public ProductResponse getProductDetails(String productId){
 //        System.out.println(productId);
         return productMapper.toProductResponse(productRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("Product not found!")));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED)));
     }
 
     // add new

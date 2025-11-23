@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Product - BEJ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        input[type="text"],
+        input[type="number"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        input[type="file"] {
+            padding: 8px;
+            border: 2px dashed #e0e0e0;
+            border-radius: 8px;
+            background: #f9f9f9;
+            cursor: pointer;
+        }
+        
+        input[type="file"]:hover {
+            border-color: #667eea;
+            background: #f0f0ff;
+        }
+        
+        .file-info {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .info-box p {
+            margin: 5px 0;
+            font-size: 13px;
+            color: #1976D2;
+        }
+        
+        .category-help {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📦 Upload Product</h1>
+        <p class="subtitle">Form đơn giản để thêm sản phẩm mới</p>
+        
+        <div class="info-box">
+            <p><strong>📋 Hướng dẫn:</strong></p>
+            <p>• Điền đầy đủ thông tin sản phẩm</p>
+            <p>• Chọn category từ danh sách</p>
+            <p>• Upload ảnh đại diện (tùy chọn)</p>
+            <p>• Status: 1 = Active, 0 = Inactive</p>
+        </div>
+        
+        <!-- Hiển thị thông báo kết quả -->
+        <div th:if="${success != null}">
+            <div th:if="${success}" class="alert alert-success">
+                ✅ <strong>Thành công!</strong> 
+                <span th:text="${message}"></span>
+                <br>
+                <small>Product ID: <span th:text="${productId}"></span></small>
+                <br>
+                <small>Product Name: <span th:text="${productName}"></span></small>
+            </div>
+            <div th:if="${!success}" class="alert alert-error">
+                ❌ <strong>Lỗi!</strong> 
+                <span th:text="${message}"></span>
+            </div>
+        </div>
+        
+        <form method="POST" action="/bej3/upload/product" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="name">Tên sản phẩm *</label>
+                <input type="text" id="name" name="name" required 
+                       placeholder="Ví dụ: iPhone 17 Pro Max">
+            </div>
+            
+            <div class="form-group">
+                <label for="description">Mô tả sản phẩm *</label>
+                <textarea id="description" name="description" required 
+                          placeholder="Mô tả chi tiết về sản phẩm..."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="categoryId">Danh mục (Category ID) *</label>
+                <input type="number" id="categoryId" name="categoryId" required 
+                       placeholder="Ví dụ: 10 (Điện Thoại), 13 (Laptop), 14 (Tablet)">
+                <p class="category-help">
+                    💡 Gợi ý: 10=Điện Thoại, 11=Dịch Vụ, 12=Phụ Kiện, 13=Laptop, 14=Tablet, 15=Smartwatch, 16=Tai Nghe
+                </p>
+            </div>
+            
+            <div class="form-group">
+                <label for="status">Trạng thái</label>
+                <select id="status" name="status">
+                    <option value="1" selected>Active (Đang bán)</option>
+                    <option value="0">Inactive (Ngừng bán)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="image">Ảnh đại diện (tùy chọn)</label>
+                <input type="file" id="image" name="image" accept="image/*">
+                <div class="file-info">
+                    Chấp nhận: JPG, PNG, GIF, WEBP
+                </div>
+            </div>
+            
+            <button type="submit" class="btn">🚀 Upload Product</button>
+        </form>
+        
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center; color: #666; font-size: 12px;">
+            <p>⚠️ Lưu ý: Form này không có bảo mật, chỉ dùng cho mục đích test/development</p>
+        </div>
+    </div>
+    
+    <script>
+        // Hiển thị tên file khi chọn
+        document.getElementById('image').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const fileInfo = document.querySelector('.file-info');
+                fileInfo.innerHTML = `📎 Đã chọn: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+            }
+        });
+    </script>
+</body>
+</html>
+

@@ -19,15 +19,6 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private final String[] PUBLIC_ENDPOINTS = {
-            "/auth/log-in", 
-            "/auth/introspect", 
-            "/users/create", 
-            "/auth/logout", 
-            "/api/device-token/test-send-notification",
-            "/"
-    };
-
     @Autowired
     private CustomJwtDecoder customJwtDecoder;
 
@@ -40,23 +31,43 @@ public class SecurityConfig {
 //         return http.build();
 //     }
 
+    /**
+     * SecurityFilterChain cho các endpoint PUBLIC (không cần OAuth2)
+     * Đặt order = 1 để chạy TRƯỚC filterChain chính
+     */
+    @Bean
+    public SecurityFilterChain publicFilterChain(HttpSecurity httpSecurity) throws Exception {
+        httpSecurity
+                .securityMatcher("/upload/**", "/images/**", "/home/**", "/banners/**", 
+                                "/ws/**", "/payment/**", "/auth/**", "/users/create",
+                                "/api/device-token/test-send-notification", "/")
+                .authorizeHttpRequests(request -> request.anyRequest().permitAll())
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(Customizer.withDefaults());
+        
+        // KHÔNG cấu hình OAuth2 cho public endpoints
+        return httpSecurity.build();
+    }
+
+    /**
+     * SecurityFilterChain chính cho các endpoint cần authentication
+     * Đặt order = 2 để chạy SAU publicFilterChain
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(request ->
-                                request.requestMatchers(PUBLIC_ENDPOINTS).permitAll()
-                                        // Admin endpoints - yêu cầu ROLE_ADMIN
-                                        .requestMatchers("/manage/product/**", "/manage/category/**", "/manage/orders/**").hasRole("ADMIN")
+                                // Admin endpoints - yêu cầu ROLE_ADMIN
+                                request.requestMatchers("/manage/product/**", "/manage/category/**", "/manage/orders/**").hasRole("ADMIN")
                                         .requestMatchers("/manage/users/**", "/manage/schedule/**").hasRole("ADMIN")
-                                        // Public endpoints
-                                        .requestMatchers("/images/**").permitAll()
-                                        .requestMatchers("/home/**", "/banners/**").permitAll()
-                                        .requestMatchers("/ws/**").permitAll()  // WebSocket endpoint
-                                        .requestMatchers("/orders/**").authenticated()  // Order endpoints yêu cầu authentication
-                                        .anyRequest().authenticated()  // Các endpoint khác yêu cầu authentication
+                                        // Order endpoints yêu cầu authentication
+                                        .requestMatchers("/orders/**").authenticated()
+                                        // Các endpoint khác yêu cầu authentication
+                                        .anyRequest().authenticated()
                 );
 
+        // OAuth2 Resource Server - chỉ áp dụng cho các endpoint cần authentication
         httpSecurity.oauth2ResourceServer(oauth2 ->
                 oauth2.jwt(jwtConfigurer ->
                                 jwtConfigurer.decoder(customJwtDecoder)
@@ -64,7 +75,6 @@ public class SecurityConfig {
                         .authenticationEntryPoint(new JwtAuthenticationEntryPoint())
         );
         httpSecurity.csrf(AbstractHttpConfigurer::disable);
-//        httpSecurity.oauth2ResourceServer(oauth2 -> oauth2.disable());
 
         return httpSecurity.build();
     }

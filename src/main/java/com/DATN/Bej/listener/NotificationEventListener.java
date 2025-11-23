@@ -52,37 +52,37 @@ public class NotificationEventListener {
     @EventListener
     public void handleOrderStatusUpdateEvent(OrderStatusUpdateEvent event) {
         log.info("📦 Handling OrderStatusUpdateEvent - Order: {}, User: {}, Status: {} -> {}", 
-                event.getOrderId(), event.getUserId(), event.getOldStatus(), event.getNewStatus());
+                event.orderId(), event.userId(), event.oldStatus(), event.newStatus());
         
         try {
             // Tạo thông báo từ event
             String title = "Cập nhật đơn hàng";
             String body = String.format("Đơn hàng #%s đã được cập nhật: %s", 
-                    event.getOrderId(), event.getStatusName());
+                    event.orderId(), event.statusName());
             
-            if (event.getNote() != null && !event.getNote().isEmpty()) {
-                body += " - " + event.getNote();
+            if (event.note() != null && !event.note().isEmpty()) {
+                body += " - " + event.note();
             }
             
             ApiNotificationRequest notificationRequest = new ApiNotificationRequest(
                 NotificationType.ORDER_STATUS_UPDATE,
                 title,
                 body,
-                Map.of("orderId", event.getOrderId(), 
-                       "oldStatus", String.valueOf(event.getOldStatus()),
-                       "newStatus", String.valueOf(event.getNewStatus()))
+                Map.of("orderId", event.orderId(), 
+                       "oldStatus", String.valueOf(event.oldStatus()),
+                       "newStatus", String.valueOf(event.newStatus()))
             );
             
             // Gửi thông báo cho user
             notificationService.createAndSendPersonalNotification(
-                event.getUserId(),
+                event.userId(),
                 notificationRequest
             );
             
-            log.info("✅ Order status update notification sent to user: {}", event.getUserId());
+            log.info("✅ Order status update notification sent to user: {}", event.userId());
         } catch (Exception e) {
             log.error("❌ Failed to send order status update notification - Order: {}, User: {} - {}", 
-                    event.getOrderId(), event.getUserId(), e.getMessage(), e);
+                    event.orderId(), event.userId(), e.getMessage(), e);
         }
     }
 
@@ -93,10 +93,10 @@ public class NotificationEventListener {
     @Async
     @EventListener
     public void handleBroadcastNotificationEvent(BroadcastNotificationEvent event) {
-        log.info("📢 Handling BroadcastNotificationEvent - Title: {}", event.getRequest().title());
+        log.info("📢 Handling BroadcastNotificationEvent - Title: {}", event.request().title());
         
         try {
-            notificationService.sendBroadcast(event.getRequest());
+            notificationService.sendBroadcast(event.request());
             log.info("✅ Broadcast notification sent successfully");
         } catch (Exception e) {
             log.error("❌ Failed to send broadcast notification - {}", e.getMessage(), e);

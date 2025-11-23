@@ -13,9 +13,12 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import java.io.IOException;
 
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
+    
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
             throws IOException, ServletException {
+        // Chỉ trả về lỗi authentication cho các endpoint cần authentication
+        // Các endpoint public đã được permitAll() trong SecurityConfig, nên sẽ không đến đây
         ErrorCode errorCode = ErrorCode.UNAUTHENTICATED;
 
         response.setStatus(errorCode.getStatusCode().value());
