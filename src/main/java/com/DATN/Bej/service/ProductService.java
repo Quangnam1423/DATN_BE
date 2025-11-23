@@ -273,21 +273,37 @@ public class ProductService {
         System.out.println("=== PRODUCT UPDATE DEBUG ===");
         System.out.println("Product ID: " + product.getId());
         System.out.println("IntroImages: ");
-        product.getIntroImages().forEach(img ->
-                System.out.println(" - id=" + img.getId() + ", url=" + img.getUrl()));
+        if (product.getIntroImages() != null) {
+            product.getIntroImages().forEach(img ->
+                    System.out.println(" - id=" + img.getId() + ", url=" + img.getUrl()));
+        } else {
+            System.out.println(" - (null)");
+        }
 
         System.out.println("Variants: ");
-        product.getVariants().forEach(variant -> {
-            System.out.println(" - Variant id=" + variant.getId() + ", color=" + variant.getColor());
+        if (product.getVariants() != null) {
+            product.getVariants().forEach(variant -> {
+                System.out.println(" - Variant id=" + variant.getId() + ", color=" + variant.getColor());
 
-            System.out.println("   DetailImages:");
-            variant.getDetailImages().forEach(img ->
-                    System.out.println("     * id=" + img.getId() + ", url=" + img.getUrl()));
+                System.out.println("   DetailImages:");
+                if (variant.getDetailImages() != null) {
+                    variant.getDetailImages().forEach(img ->
+                            System.out.println("     * id=" + img.getId() + ", url=" + img.getUrl()));
+                } else {
+                    System.out.println("     * (null)");
+                }
 
-            System.out.println("   Attributes:");
-            variant.getAttributes().forEach(attr ->
-                    System.out.println("     * id=" + attr.getId() + ", name=" + attr.getName()));
-        });
+                System.out.println("   Attributes:");
+                if (variant.getAttributes() != null) {
+                    variant.getAttributes().forEach(attr ->
+                            System.out.println("     * id=" + attr.getId() + ", name=" + attr.getName()));
+                } else {
+                    System.out.println("     * (null)");
+                }
+            });
+        } else {
+            System.out.println(" - (null)");
+        }
         System.out.println("update");
 
 
@@ -423,21 +439,37 @@ public class ProductService {
         System.out.println("=== PRODUCT UPDATE DEBUG ===");
         System.out.println("Product ID: " + product.getId());
         System.out.println("IntroImages: ");
-        product.getIntroImages().forEach(img ->
-                System.out.println(" - id=" + img.getId() + ", url=" + img.getUrl()));
+        if (product.getIntroImages() != null) {
+            product.getIntroImages().forEach(img ->
+                    System.out.println(" - id=" + img.getId() + ", url=" + img.getUrl()));
+        } else {
+            System.out.println(" - (null)");
+        }
 
         System.out.println("Variants: ");
-        product.getVariants().forEach(variant -> {
-            System.out.println(" - Variant id=" + variant.getId() + ", color=" + variant.getColor());
+        if (product.getVariants() != null) {
+            product.getVariants().forEach(variant -> {
+                System.out.println(" - Variant id=" + variant.getId() + ", color=" + variant.getColor());
 
-            System.out.println("   DetailImages:");
-            variant.getDetailImages().forEach(img ->
-                    System.out.println("     * id=" + img.getId() + ", url=" + img.getUrl()));
+                System.out.println("   DetailImages:");
+                if (variant.getDetailImages() != null) {
+                    variant.getDetailImages().forEach(img ->
+                            System.out.println("     * id=" + img.getId() + ", url=" + img.getUrl()));
+                } else {
+                    System.out.println("     * (null)");
+                }
 
-            System.out.println("   Attributes:");
-            variant.getAttributes().forEach(attr ->
-                    System.out.println("     * id=" + attr.getId() + ", name=" + attr.getName()));
-        });
+                System.out.println("   Attributes:");
+                if (variant.getAttributes() != null) {
+                    variant.getAttributes().forEach(attr ->
+                            System.out.println("     * id=" + attr.getId() + ", name=" + attr.getName()));
+                } else {
+                    System.out.println("     * (null)");
+                }
+            });
+        } else {
+            System.out.println(" - (null)");
+        }
 
         return productMapper.toProductResponse(productRepository.save(product));
     }
