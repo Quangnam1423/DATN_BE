@@ -19,7 +19,16 @@ public class FirebaseConfig {
     
     @Bean
     public FirebaseApp firebaseApp() throws IOException {
-        log.info("🔥 Initializing Firebase...");
+        // Kiểm tra xem FirebaseApp đã được khởi tạo chưa
+        // (Tránh lỗi khi Spring DevTools hot reload)
+        try {
+            FirebaseApp existingApp = FirebaseApp.getInstance();
+            log.info("✅ FirebaseApp already exists, reusing existing instance: {}", existingApp.getName());
+            return existingApp;
+        } catch (IllegalStateException e) {
+            // FirebaseApp chưa tồn tại, tiếp tục khởi tạo
+            log.info("🔥 Initializing Firebase...");
+        }
         
         // Đường dẫn tới file service account JSON
         String filePath = "src/main/resources/datn-e3c62-firebase-adminsdk-fbsvc-8b853f1fc7.json";

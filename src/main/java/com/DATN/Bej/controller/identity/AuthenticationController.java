@@ -3,10 +3,12 @@ package com.DATN.Bej.controller.identity;
 import com.DATN.Bej.dto.request.ApiResponse;
 import com.DATN.Bej.dto.request.identityRequest.AuthenticationRequest;
 import com.DATN.Bej.dto.request.identityRequest.IntrospectRequest;
+import com.DATN.Bej.dto.response.UserResponse;
 import com.DATN.Bej.dto.response.identity.AuthenticationResponse;
 import com.DATN.Bej.dto.response.identity.IntrospectResponse;
 import com.DATN.Bej.service.FcmDeviceTokenService;
 import com.DATN.Bej.service.identity.AuthenticationService;
+import com.DATN.Bej.service.identity.UserService;
 import com.nimbusds.jose.JOSEException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
@@ -16,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,6 +35,7 @@ public class AuthenticationController {
 
     AuthenticationService authenticationService;
     FcmDeviceTokenService fcmDeviceTokenService;
+    UserService userService;
 
     @PostMapping("/log-in")
     ApiResponse<AuthenticationResponse> authenticate(@RequestBody AuthenticationRequest request){
@@ -48,6 +52,21 @@ public class AuthenticationController {
         var result = authenticationService.introspect(request);
         return ApiResponse.<IntrospectResponse>builder()
                 .result(result)
+                .build();
+    }
+
+    /**
+     * GET /auth/me
+     * Lấy thông tin user hiện tại từ JWT token
+     * Endpoint này yêu cầu authentication (có Bearer token trong header)
+     */
+    @GetMapping("/me")
+    ApiResponse<UserResponse> getCurrentUser() {
+        log.info("📋 Getting current user info from token");
+        UserResponse userInfo = userService.getMyInfo();
+        log.info("✅ Retrieved user info for: {}", userInfo.getPhoneNumber());
+        return ApiResponse.<UserResponse>builder()
+                .result(userInfo)
                 .build();
     }
 

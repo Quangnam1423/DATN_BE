@@ -12,8 +12,10 @@ import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import com.DATN.Bej.entity.product.Category;
 import com.DATN.Bej.repository.RoleRepository;
 import com.DATN.Bej.repository.UserRepository;
+import com.DATN.Bej.repository.product.CategoryRepository;
 
 import lombok.AllArgsConstructor;
 
@@ -36,6 +38,9 @@ public class DatabaseInitlizer implements CommandLineRunner{
 
     @Autowired
     private final PasswordEncoder passwordEncoder;
+    
+    @Autowired
+    private final CategoryRepository categoryRepository;
 
     @Override
     public void run(String... args) throws Exception {
@@ -48,7 +53,58 @@ public class DatabaseInitlizer implements CommandLineRunner{
             
             //verifyDataInsertion();
             System.out.println("=== Database Initialization Completed ===");
-        } 
+        }
+        
+        // Initialize categories nếu chưa có
+        initializeCategories();
+    }
+    
+    /**
+     * Khởi tạo các categories cơ bản nếu chưa có trong database
+     */
+    private void initializeCategories() {
+        System.out.println("=== Initializing Categories ===");
+        
+        // Danh sách categories cần có
+        String[][] categories = {
+            {"Điện thoại", "DT"},
+            {"Laptop", "LT"},
+            {"Tablet", "TB"},
+            {"Màn hình", "MH"},
+            {"Linh kiện máy tính", "LK"},
+            {"Điện máy", "DM"},
+            {"Đồng hồ", "DH"},
+            {"Âm thanh", "AT"},
+            {"Smart home", "SH"},
+            {"Phụ kiện", "PK"},
+            {"Sửa chữa", "SC"}
+        };
+        
+        int createdCount = 0;
+        int existingCount = 0;
+        
+        for (String[] categoryData : categories) {
+            String name = categoryData[0];
+            String sku = categoryData[1];
+            
+            // Kiểm tra category đã tồn tại chưa
+            if (!categoryRepository.existsByName(name)) {
+                Category category = new Category();
+                category.setName(name);
+                category.setSku(sku);
+                categoryRepository.save(category);
+                System.out.println("✅ Created category: " + name + " (SKU: " + sku + ")");
+                createdCount++;
+            } else {
+                System.out.println("⏭️  Category already exists: " + name);
+                existingCount++;
+            }
+        }
+        
+        System.out.println("=== Category Initialization Summary ===");
+        System.out.println("Created: " + createdCount);
+        System.out.println("Already exists: " + existingCount);
+        System.out.println("Total categories: " + categoryRepository.count());
     }
 
     private boolean isDatabaseEmpty() {

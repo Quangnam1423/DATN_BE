@@ -74,10 +74,80 @@ public class CartService {
     public List<CartItemResponse> viewCart(){
         var context = SecurityContextHolder.getContext();
         String name = context.getAuthentication().getName();
-        log.info(name);
+        log.info("Viewing cart for user: {}", name);
         User user = userRepository.findByPhoneNumber(name).orElseThrow(
                 () -> new AppException(ErrorCode.USER_NOT_EXISTED));
         return cartItemRepository.findAllByUserId(user.getId()).stream().map(cartItemMapper::toCartItemResponse).toList();
+    }
+    
+    /**
+     * Cập nhật số lượng của item trong giỏ hàng
+     * @param cartItemId ID của cart item
+     * @param quantity Số lượng mới (phải > 0)
+     * @return CartItemResponse - Thông tin item đã được cập nhật
+     * @throws AppException nếu quantity <= 0 hoặc user không sở hữu cart item
+     */
+    public CartItemResponse updateCartItemQuantity(String cartItemId, int quantity) {
+        if (quantity <= 0) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
+        
+        var context = SecurityContextHolder.getContext();
+        String phoneNumber = context.getAuthentication().getName();
+        User user = userRepository.findByPhoneNumber(phoneNumber).orElseThrow(
+                () -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        
+        CartItem cartItem = cartItemRepository.findById(cartItemId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        
+        // Kiểm tra user sở hữu cart item
+        if (!cartItem.getUser().getId().equals(user.getId())) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+        
+        // Cập nhật quantity và price (price có thể thay đổi theo thời gian)
+        cartItem.setQuantity(quantity);
+        cartItem.setPrice(cartItem.getProductA().getFinalPrice());
+        
+        CartItem saved = cartItemRepository.save(cartItem);
+        log.info("Cart item quantity updated - ID: {}, New quantity: {}", cartItemId, quantity);
+        return cartItemMapper.toCartItemResponse(saved);
+    }
+    
+    /**
+     * Xóa item khỏi giỏ hàng
+     * @param cartItemId ID của cart item cần xóa
+     */
+    public void removeFromCart(String cartItemId) {
+        var context = SecurityContextHolder.getContext();
+        String phoneNumber = context.getAuthentication().getName();
+        User user = userRepository.findByPhoneNumber(phoneNumber).orElseThrow(
+                () -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        
+        CartItem cartItem = cartItemRepository.findById(cartItemId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        
+        // Kiểm tra user sở hữu cart item
+        if (!cartItem.getUser().getId().equals(user.getId())) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+        
+        cartItemRepository.delete(cartItem);
+        log.info("Cart item removed - ID: {}", cartItemId);
+    }
+    
+    /**
+     * Xóa tất cả items trong giỏ hàng của user hiện tại
+     */
+    public void clearCart() {
+        var context = SecurityContextHolder.getContext();
+        String phoneNumber = context.getAuthentication().getName();
+        User user = userRepository.findByPhoneNumber(phoneNumber).orElseThrow(
+                () -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        
+        List<CartItem> cartItems = cartItemRepository.findAllByUserId(user.getId());
+        cartItemRepository.deleteAll(cartItems);
+        log.info("Cart cleared - Removed {} items", cartItems.size());
     }
 
     public OrderDetailsResponse placeOrder(OrderRequest request) {
@@ -118,12 +188,36 @@ public class CartService {
     public List<OrderDetailsResponse> getMyOrder(){
         var context = SecurityContextHolder.getContext();
         String name = context.getAuthentication().getName();
-        log.info(name);
+        log.info("Getting orders for user: {}", name);
         User user = userRepository.findByPhoneNumber(name).orElseThrow(
                 () -> new AppException(ErrorCode.USER_NOT_EXISTED));
         List<Orders> orders = ordersRepository.findAllByUserId(user.getId());
 
         return orders.stream().map(orderMapper::toOrderDetailsResponse).toList();
+    }
+    
+    /**
+     * Lấy chi tiết đơn hàng của user hiện tại
+     * @param orderId ID của đơn hàng
+     * @return OrderDetailsResponse
+     * @throws AppException nếu đơn hàng không tồn tại hoặc không thuộc về user
+     */
+    public OrderDetailsResponse getMyOrderDetails(String orderId) {
+        var context = SecurityContextHolder.getContext();
+        String phoneNumber = context.getAuthentication().getName();
+        User user = userRepository.findByPhoneNumber(phoneNumber).orElseThrow(
+                () -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        
+        Orders order = ordersRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        
+        // Kiểm tra user sở hữu đơn hàng
+        if (!order.getUser().getId().equals(user.getId())) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+        
+        log.info("Order details retrieved - Order: {}, User: {}", orderId, phoneNumber);
+        return orderMapper.toOrderDetailsResponse(order);
     }
 
     //  ======================================================================================

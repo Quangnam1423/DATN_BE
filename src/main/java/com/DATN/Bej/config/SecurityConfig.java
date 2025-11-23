@@ -15,8 +15,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
-//@EnableMethodSecurity
-//@EnableWebSecurity
+@EnableMethodSecurity
+@EnableWebSecurity
 public class SecurityConfig {
 
     private final String[] PUBLIC_ENDPOINTS = {
@@ -46,11 +46,15 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(request ->
                                 request.requestMatchers(PUBLIC_ENDPOINTS).permitAll()
-//                        .requestMatchers("/admin/**").hasRole("ADMIN")
-                                        .requestMatchers("/manage/product/**", "/manage/category/**", "/manage/orders/**").hasAuthority("MANAGE_PRODUCT")
-                                        .requestMatchers("/manage/users/**", "/manage/schedule/**").hasAuthority("MANAGE_STAFF")
+                                        // Admin endpoints - yêu cầu ROLE_ADMIN
+                                        .requestMatchers("/manage/product/**", "/manage/category/**", "/manage/orders/**").hasRole("ADMIN")
+                                        .requestMatchers("/manage/users/**", "/manage/schedule/**").hasRole("ADMIN")
+                                        // Public endpoints
                                         .requestMatchers("/images/**").permitAll()
-                                        .anyRequest().permitAll()
+                                        .requestMatchers("/home/**", "/banners/**").permitAll()
+                                        .requestMatchers("/ws/**").permitAll()  // WebSocket endpoint
+                                        .requestMatchers("/orders/**").authenticated()  // Order endpoints yêu cầu authentication
+                                        .anyRequest().authenticated()  // Các endpoint khác yêu cầu authentication
                 );
 
         httpSecurity.oauth2ResourceServer(oauth2 ->

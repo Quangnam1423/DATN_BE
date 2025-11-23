@@ -29,6 +29,8 @@ spring:
   rabbitmq:
     host: localhost
     port: 61613
+    stomp:
+      port: 61613
     username: guest
     password: guest
 

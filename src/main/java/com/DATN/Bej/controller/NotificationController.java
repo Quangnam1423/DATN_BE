@@ -3,18 +3,23 @@ package com.DATN.Bej.controller;
 import com.DATN.Bej.dto.ApiNotificationRequest;
 import com.DATN.Bej.dto.request.ApiResponse;
 import com.DATN.Bej.entity.Notification;
+import com.DATN.Bej.event.BroadcastNotificationEvent;
+import com.DATN.Bej.event.NotificationSendEvent;
 import com.DATN.Bej.service.NotificationService;
-
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor 
@@ -22,34 +27,44 @@ import java.util.List;
 public class NotificationController {
 
     NotificationService notificationService;
+    ApplicationEventPublisher eventPublisher;
 
     /**
      * API gửi cá nhân (dùng bởi admin/service khác)
-     * Trả về ApiResponse (giống /log-in)
+     * Yêu cầu: ROLE_ADMIN
+     * Sử dụng event để tự động gửi qua WebSocket, Firebase và lưu vào database
      */
     @PostMapping("/user/{userId}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> sendToUserById(
             @PathVariable String userId,
             @RequestBody ApiNotificationRequest request) {
         
-        // Service sẽ ném RuntimeException (ví dụ: UserNotFound)
-        // và sẽ được xử lý bởi một @RestControllerAdvice (giống như logic /log-in)
-        notificationService.createAndSendPersonalNotification(userId, request);
+        log.info("📨 Admin sending notification to user: {}", userId);
+        
+        // Publish event - EventListener sẽ tự động xử lý
+        eventPublisher.publishEvent(new NotificationSendEvent(userId, request));
         
         return ApiResponse.<Void>builder()
-                .message("Đã gửi tin nhắn CÁ NHÂN cho user ID: " + userId)
-                .build(); // Mặc định code = 1000 (thành công)
+                .message("Notification event published for user: " + userId)
+                .build();
     }
 
     /**
      * API gửi broadcast (dùng bởi admin/service khác)
-     * Trả về ApiResponse (giống /log-in)
+     * Yêu cầu: ROLE_ADMIN
+     * Sử dụng event để tự động gửi qua WebSocket, Firebase và lưu vào database cho tất cả users
      */
     @PostMapping("/broadcast")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> sendBroadcastNotification(@RequestBody ApiNotificationRequest request) {
-        notificationService.sendBroadcast(request);
+        log.info("📢 Admin sending broadcast notification - Title: {}", request.title());
+        
+        // Publish event - EventListener sẽ tự động xử lý
+        eventPublisher.publishEvent(new BroadcastNotificationEvent(request));
+        
         return ApiResponse.<Void>builder()
-                .message("Đã gửi broadcast: " + request.title())
+                .message("Broadcast notification event published")
                 .build();
     }
 

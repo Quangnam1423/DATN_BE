@@ -8,6 +8,7 @@ import com.DATN.Bej.entity.identity.InvalidatedToken;
 import com.DATN.Bej.entity.identity.User;
 import com.DATN.Bej.exception.AppException;
 import com.DATN.Bej.exception.ErrorCode;
+import com.DATN.Bej.repository.FcmDeviceTokenRepository;
 import com.DATN.Bej.repository.InvalidatedTokenRepositoy;
 import com.DATN.Bej.repository.UserRepository;
 import com.nimbusds.jose.*;
@@ -40,6 +41,7 @@ import java.util.UUID;
 public class AuthenticationService {
     UserRepository userRepository;
     InvalidatedTokenRepositoy invalidatedTokenRepositoy;
+    FcmDeviceTokenRepository fcmDeviceTokenRepository;
 
     @NonFinal
     @Value("${jwt.signerKey}")
@@ -70,6 +72,21 @@ public class AuthenticationService {
         if (!authenticated)
             throw  new AppException(ErrorCode.UNAUTHENTICATED);
 
+        // 🗑️ Xóa tất cả device tokens cũ của user khi đăng nhập
+        // Để đảm bảo mỗi lần đăng nhập chỉ có device hiện tại được liên kết
+        try {
+            var existingTokens = fcmDeviceTokenRepository.findByUser_Id(user.getId());
+            if (!existingTokens.isEmpty()) {
+                log.info("🗑️ Deleting {} old device tokens for user: {}", existingTokens.size(), user.getPhoneNumber());
+                fcmDeviceTokenRepository.deleteByUser_Id(user.getId());
+                log.info("✅ Successfully deleted old device tokens for user: {}", user.getPhoneNumber());
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ Could not delete old device tokens during login: {}", e.getMessage());
+            // Không throw exception, login vẫn thành công ngay cả khi xóa device token thất bại
+        }
+
+        // Tạo token mới
         var token = generateToken(user);
 
         return AuthenticationResponse.builder()

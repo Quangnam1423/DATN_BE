@@ -119,4 +119,25 @@ public class FcmDeviceTokenService {
             .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
         return fcmDeviceTokenRepository.findByUser_Id(user.getId());
     }
+    
+    /**
+     * Lấy danh sách token strings (active) của user theo userId (UUID)
+     * Dùng cho NotificationService
+     */
+    public List<String> getActiveTokensForUser(String userId) {
+        List<FcmDeviceToken> tokens = fcmDeviceTokenRepository.findByUser_Id(userId);
+        return tokens.stream()
+                .map(FcmDeviceToken::getToken)
+                .toList();
+    }
+    
+    /**
+     * Xóa token theo giá trị token string
+     * Dùng khi token không hợp lệ hoặc gửi FCM thất bại
+     */
+    public void deleteTokenByValue(String tokenValue) {
+        fcmDeviceTokenRepository.findByToken(tokenValue)
+            .ifPresent(fcmDeviceTokenRepository::delete);
+        log.info("🗑️ Deleted FCM token by value");
+    }
 }
