@@ -17,7 +17,6 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -88,21 +87,21 @@ public class AuthenticationController {
                 .token(token)
                 .build();
         
-        // 🔐 Logout người dùng từ hệ thống
-        authenticationService.logout(introspectRequest);
+        // 🔐 Logout người dùng từ hệ thống - thêm token vào blacklist
+        // Method này trả về phoneNumber từ JWT token để xóa FCM tokens
+        String phoneNumber = authenticationService.logout(introspectRequest);
         
         // 🗑️ Xóa tất cả FCM tokens của user (để không nhận push notification sau khi logout)
-        try {
-            String phoneNumber = SecurityContextHolder.getContext()
-                .getAuthentication()
-                .getName();
-            if (phoneNumber != null) {
+        if (phoneNumber != null && !phoneNumber.isEmpty()) {
+            try {
                 fcmDeviceTokenService.deleteAllTokensForUser(phoneNumber);
                 log.info("✅ FCM tokens deleted for user: {}", phoneNumber);
+            } catch (Exception e) {
+                log.warn("⚠️ Could not delete FCM tokens during logout: {}", e.getMessage());
+                // Không throw exception, logout vẫn thành công ngay cả khi xóa FCM token thất bại
             }
-        } catch (Exception e) {
-            log.warn("⚠️ Could not delete FCM tokens during logout: {}", e.getMessage());
-            // Không throw exception, logout vẫn thành công ngay cả khi xóa FCM token thất bại
+        } else {
+            log.warn("⚠️ PhoneNumber is null or empty, cannot delete FCM tokens");
         }
         
         return ResponseEntity.ok(

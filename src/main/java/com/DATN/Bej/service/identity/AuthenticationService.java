@@ -95,12 +95,17 @@ public class AuthenticationService {
                 .build();
     }
 
-    public void logout(IntrospectRequest request) throws ParseException, JOSEException {
+    /**
+     * Logout user và thêm token vào blacklist
+     * @return phoneNumber của user đã logout (để xóa FCM tokens)
+     */
+    public String logout(IntrospectRequest request) throws ParseException, JOSEException {
 
         var signToken = verifyTokenForLogout(request.getToken());
 
         String jit = signToken.getJWTClaimsSet().getJWTID();
         Date expiryTime = signToken.getJWTClaimsSet().getExpirationTime();
+        String phoneNumber = signToken.getJWTClaimsSet().getSubject(); // Lấy phoneNumber từ JWT subject
 
         InvalidatedToken invalidatedToken = InvalidatedToken.builder()
                 .id(jit)
@@ -108,6 +113,9 @@ public class AuthenticationService {
                 .build();
 
         invalidatedTokenRepositoy.save(invalidatedToken);
+        log.info("✅ Token invalidated (blacklisted) for user: {}", phoneNumber);
+        
+        return phoneNumber;
     }
 
     /**
