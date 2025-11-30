@@ -33,3 +33,5 @@ build/
 .vscode/
 
 /src/main/java/com/DATN/Bej/entity/product/adu.txt
+
+*.json

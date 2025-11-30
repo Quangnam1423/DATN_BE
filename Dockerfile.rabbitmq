@@ -1,5 +1,3 @@
 FROM rabbitmq:3-management
 
-# Bật sẵn các plugin cần thiết (TCP Stomp, Web Socket Stomp, Management UI)
-# Chạy offline ngay khi build image nên không lo vấn đề quyền user
 RUN rabbitmq-plugins enable --offline rabbitmq_stomp rabbitmq_web_stomp rabbitmq_management
