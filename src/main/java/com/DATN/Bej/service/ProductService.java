@@ -51,6 +51,7 @@ public class ProductService {
     ProductVariantMapper productVariantMapper;
     ProductAttributeMapper productAttributeMapper;
     FileStorageService fileStorageService;
+    CloudinaryService cloudinaryService;
 
 //    private final UserRepository userRepository;
 
@@ -559,10 +560,13 @@ public class ProductService {
 //    }
 
     /**
-     * Lưu file ảnh và trả về URL
-     * Sử dụng FileStorageService để tự động generate tên file và lưu vào resource/static/images
+     * Lưu file ảnh và trả về URL.
+     * Hiện tại flow sẽ:
+     * 1. Upload ảnh lên Cloudinary
+     * 2. Lấy secure_url trả về và lưu xuống DB
      */
     private String saveFile(MultipartFile file) throws IOException {
-        return fileStorageService.saveFile(file);
+        // Upload lên Cloudinary và lấy URL
+        return cloudinaryService.uploadImage(file);
     }
 }

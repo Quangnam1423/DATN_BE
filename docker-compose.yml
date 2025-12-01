@@ -52,20 +52,12 @@ services:
         condition: service_healthy
     ports:
       - "8080:8080"
+    # Load biến môi trường từ file .env (không commit lên git)
+    env_file:
+      - .env
+
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/new_bej_sp3
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=root
-      - SPRING_RABBITMQ_HOST=rabbitmq
-      - SPRING_RABBITMQ_PORT=5672
-      - SPRING_RABBITMQ_STOMP_PORT=61613
-      - SPRING_RABBITMQ_USERNAME=guest
-      - SPRING_RABBITMQ_PASSWORD=guest
-      - SPRING_SQL_INIT_MODE=never
       - SPRING_PROFILES_ACTIVE=docker
-      # DevTools - Đảm bảo hot reload hoạt động trong Docker
-      - SPRING_DEVTOOLS_RESTART_ENABLED=true
-      - SPRING_DEVTOOLS_LIVERELOAD_ENABLED=true
     # [QUAN TRỌNG] Ánh xạ code từ máy thật vào container
     volumes:
       - ./pom.xml:/app/pom.xml        # Link file cấu hình maven

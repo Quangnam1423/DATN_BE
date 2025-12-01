@@ -130,12 +130,23 @@
 			<groupId>io.projectreactor.netty</groupId>
 			<artifactId>reactor-netty-http</artifactId>
 		</dependency>
-		
-		<!-- Spring Boot Dotenv -->
+
 		<dependency>
-			<groupId>io.github.cdimascio</groupId>
-			<artifactId>spring-boot-dotenv</artifactId>
-			<version>2.2.0</version>
+			<groupId>com.cloudinary</groupId>
+			<artifactId>cloudinary-http5</artifactId>
+			<version>2.0.0</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.cloudinary</groupId>
+			<artifactId>cloudinary-taglib</artifactId>
+			<version>2.0.0</version>
+		</dependency>
+		
+		<dependency>
+			<groupId>me.paulschwarz</groupId>
+			<artifactId>spring-dotenv</artifactId>
+			<version>4.0.0</version>
 		</dependency>
 		
 	</dependencies>
