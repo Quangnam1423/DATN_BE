@@ -42,8 +42,7 @@ public class UserService {
 
         User user = userMapper.toUser(request);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        System.out.println("request role: " + request.getRole());
-        var role = roleRepository.findById(request.getRole())
+        var role = roleRepository.findById("USER")
                 .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));;
         System.out.println("role: " + role);
         HashSet<Role> roles = new HashSet<>();
@@ -59,9 +58,6 @@ public class UserService {
                 .orElseThrow(() -> new RuntimeException("User Not Found"));
         userMapper.updateUser(user, request);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-
-//        var roles = roleRepository.findAllById(request.getRoles());
-//        user.setRoles(new HashSet<>(roles));
 
         return userMapper.toUserResponse(userRepository.save(user));
     }
