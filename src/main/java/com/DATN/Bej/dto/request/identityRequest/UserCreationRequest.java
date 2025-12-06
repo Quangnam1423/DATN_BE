@@ -11,9 +11,10 @@ import jakarta.validation.constraints.NotBlank;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserCreationRequest {
+    @NotBlank(message = "phone number is required")
     String phoneNumber;
     String password;
-    String role = "USER";
+//    String role = "USER";
     
     // Thêm 2 trường mới
     @NotBlank(message = "Full name is required")
