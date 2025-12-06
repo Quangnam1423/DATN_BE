@@ -489,71 +489,166 @@ Permissions (Examples):
 
 ## 🛠️ Cấu Hình & Khởi Động
 
-### Database Setup
+### 1. Firebase Configuration (Cấu hình Firebase)
+
+#### Bước 1: Thêm Firebase Service Account JSON
+1. Tải file Service Account JSON từ Firebase Console:
+   - Vào Firebase Console → Project Settings → Service Accounts
+   - Click "Generate new private key"
+   - Tải file JSON về máy
+
+2. Đặt file JSON vào thư mục `src/main/resources/`:
+   ```bash
+   # Đảm bảo file có tên đúng:
+   src/main/resources/datn-e3c62-firebase-adminsdk-fbsvc-8b853f1fc7.json
+   ```
+
+3. File này được cấu hình trong `application.yaml`:
+   ```yaml
+   firebase:
+     config:
+       service-account-key-path: classpath:datn-e3c62-firebase-adminsdk-fbsvc-8b853f1fc7.json
+   ```
+
+> **Lưu ý**: File Firebase JSON chứa thông tin nhạy cảm, đảm bảo không commit lên git (đã có trong `.gitignore`).
+
+---
+
+### 2. Environment Variables (Biến môi trường)
+
+#### Tạo file `.env` trong thư mục root của project:
+
 ```bash
-# MySQL connection
-jdbc:mysql://localhost:3306/new_bej_sp3?createDatabaseIfNotExist=true
-username: root
-password: trucdang02
+# Database Configuration
+DB_HOST=mysql
+DB_PORT=3306
+DB_NAME=new_bej_sp3
+DB_USERNAME=root
+DB_PASSWORD=root
 
-# Hibernate auto-update schema
-spring.jpa.hibernate.ddl-auto: update
-```
+# RabbitMQ Configuration
+RABBITMQ_HOST=rabbitmq
+RABBITMQ_PORT=5672
+RABBITMQ_STOMP_PORT=61613
+RABBITMQ_USERNAME=guest
+RABBITMQ_PASSWORD=guest
 
-### Application Configuration
-```yaml
-# application.yaml
-server:
-  port: 8080
-  servlet:
-    context-path: /bej3
-
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/new_bej_sp3
-    username: root
-    password: trucdang02
-  jpa:
-    hibernate:
-      ddl-auto: update
-  
-  # CORS configuration
-  web:
-    cors:
-      allowed-origins: "http://localhost:5173"
-      allowed-methods: "GET,POST,PUT,DELETE,OPTIONS"
-
-  # RabbitMQ (Message Queue)
-  rabbitmq:
-    host: localhost
-    port: 61613
-    username: guest
-    password: guest
+# Firebase Configuration
+FIREBASE_PROJECT_ID=datn-e3c62
+FIREBASE_DATABASE_URL=https://datn-e3c62-default-rtdb.asia-southeast1.firebasedatabase.app/
+FIREBASE_STORAGE_BUCKET=datn-e3c62.appspot.com
 
 # JWT Configuration
-jwt:
-  signerKey: "7bZydhCMPlM7eKuKjxy1gIhbtMo7hTPNvYJr2FguJZtvxpeQ21K3MjP90WjNtYLO"
+JWT_SIGNER_KEY=7bZydhCMPlM7eKuKjxy1gIhbtMo7hTPNvYJr2FguJZtvxpeQ21K3MjP90WjNtYLO
+
+# CORS Configuration
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+
+# Cloudinary Configuration (cho upload ảnh)
+CLOUDINARY_CLOUD_NAME=your_cloud_name_here
+CLOUDINARY_API_KEY=your_api_key_here
+CLOUDINARY_API_SECRET=your_api_secret_here
 ```
 
-### Run Locally
+> **Lưu ý**: 
+> - File `.env` không được commit lên git (đã có trong `.gitignore`)
+> - Bạn có thể tham khảo file `env.example` để tạo file `.env` của mình
+> - Thay đổi các giá trị theo môi trường của bạn (đặc biệt là Cloudinary credentials)
+
+---
+
+### 3. Docker Compose Setup (Khuyến nghị)
+
+#### Bước 1: Đảm bảo đã cài đặt Docker và Docker Compose
 ```bash
-# Using Maven
+# Kiểm tra Docker
+docker --version
+docker compose version
+```
+
+#### Bước 2: Tạo file `.env` (xem hướng dẫn ở trên)
+
+#### Bước 3: Đặt Firebase JSON file vào `src/main/resources/`
+
+#### Bước 4: Chạy ứng dụng với Docker Compose
+```bash
+# Chạy các services (MySQL, RabbitMQ, Spring Boot App) ở chế độ detached
+docker compose up -d
+
+# Xem logs của tất cả services
+docker compose logs -f
+
+# Xem logs của service cụ thể
+docker compose logs -f app
+
+# Dừng các services
+docker compose down
+
+# Dừng và xóa volumes (dữ liệu)
+docker compose down -v
+```
+
+#### Docker Compose Services:
+- **MySQL**: Port `3307` (mapped từ `3306` trong container)
+- **RabbitMQ**: 
+  - AMQP: Port `5672`
+  - Management UI: Port `15672` (http://localhost:15672)
+  - STOMP: Port `61613`
+  - WebSocket: Port `15674`
+- **Spring Boot App**: Port `8080` (API: http://localhost:8080/bej3)
+
+---
+
+### 4. Run Locally (Chạy local không dùng Docker)
+
+#### Yêu cầu:
+- Java 21
+- Maven 3.9+
+- MySQL 8.x (chạy local trên port 3306)
+- RabbitMQ (chạy local)
+
+#### Các bước:
+```bash
+# 1. Cấu hình database MySQL local
+# Tạo database: new_bej_sp3
+mysql -u root -p
+CREATE DATABASE new_bej_sp3;
+
+# 2. Cập nhật application.yaml với thông tin database local
+# (sửa DB_HOST=localhost, DB_PORT=3306)
+
+# 3. Tạo file .env với cấu hình local
+DB_HOST=localhost
+DB_PORT=3306
+# ... (các biến khác)
+
+# 4. Chạy ứng dụng
 mvn clean spring-boot:run
 
-# Build JAR
+# Hoặc build và chạy JAR
 mvn clean package
-
-# Run JAR
 java -jar target/Bej-0.0.1-SNAPSHOT.jar
 ```
 
-### Docker Setup
-```bash
-# Build Docker image
-docker build -t bej-backend .
+---
 
-# Run container
-docker-compose up
+### 5. Verify Installation (Kiểm tra cài đặt)
+
+Sau khi chạy `docker compose up -d`, kiểm tra:
+
+```bash
+# 1. Kiểm tra các containers đang chạy
+docker compose ps
+
+# 2. Kiểm tra API endpoint
+curl http://localhost:8080/bej3/home
+
+# 3. Kiểm tra RabbitMQ Management UI
+# Mở trình duyệt: http://localhost:15672
+# Login: guest / guest
+
+# 4. Kiểm tra MySQL connection
+docker exec -it mysql_db mysql -uroot -proot -e "SHOW DATABASES;"
 ```
 
 ---
