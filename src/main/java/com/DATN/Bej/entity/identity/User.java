@@ -24,7 +24,10 @@ public class User {
     String password;
     String address;
     LocalDate dob;
+    
+    @Column(unique = true, nullable = false)
     String email;
+    
     String phoneNumber;
 
     @ManyToMany(fetch = FetchType.EAGER)
