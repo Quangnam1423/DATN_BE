@@ -2,9 +2,14 @@ package com.DATN.Bej.controller;
 
 import com.DATN.Bej.dto.ApiNotificationRequest;
 import com.DATN.Bej.dto.request.ApiResponse;
-import com.DATN.Bej.entity.Notification;
+import com.DATN.Bej.dto.request.NotificationMultipleUsersRequest;
+import com.DATN.Bej.dto.response.NotificationResponse;
+import com.DATN.Bej.entity.identity.User;
 import com.DATN.Bej.event.BroadcastNotificationEvent;
 import com.DATN.Bej.event.NotificationSendEvent;
+import com.DATN.Bej.exception.AppException;
+import com.DATN.Bej.exception.ErrorCode;
+import com.DATN.Bej.repository.UserRepository;
 import com.DATN.Bej.service.NotificationService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +22,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -28,6 +35,20 @@ public class NotificationController {
 
     NotificationService notificationService;
     ApplicationEventPublisher eventPublisher;
+    UserRepository userRepository;
+    
+    /**
+     * Helper method: Lấy userId từ phoneNumber (principal.getName())
+     */
+    private String getUserIdFromPrincipal(Principal principal) {
+        if (principal == null) {
+            return null;
+        }
+        String phoneNumber = principal.getName();
+        User user = userRepository.findByPhoneNumber(phoneNumber)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        return user.getId();
+    }
 
     /**
      * API gửi cá nhân (dùng bởi admin/service khác)
@@ -51,6 +72,25 @@ public class NotificationController {
     }
 
     /**
+     * API gửi notification cho nhiều người
+     * Yêu cầu: ROLE_ADMIN
+     */
+    @PostMapping("/multiple-users")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<Void> sendToMultipleUsers(@RequestBody NotificationMultipleUsersRequest request) {
+        log.info("📨 Admin sending notification to {} users", request.getUserIds().size());
+        
+        notificationService.sendNotificationsToMultipleUsers(
+                request.getUserIds(), 
+                request.getNotification()
+        );
+        
+        return ApiResponse.<Void>builder()
+                .message("Notifications sent to " + request.getUserIds().size() + " users")
+                .build();
+    }
+
+    /**
      * API gửi broadcast (dùng bởi admin/service khác)
      * Yêu cầu: ROLE_ADMIN
      * Sử dụng event để tự động gửi qua WebSocket, Firebase và lưu vào database cho tất cả users
@@ -69,36 +109,83 @@ public class NotificationController {
     }
 
     /**
-     * API lấy LỊCH SỬ (dùng bởi client đã đăng nhập)
-     * Trả về ResponseEntity (giống /logout) vì cần check Principal
+     * API lấy TẤT CẢ notifications của user hiện tại
+     * Trả về danh sách NotificationResponse
      */
-    @GetMapping("/my-history")
-    public ResponseEntity<ApiResponse<List<Notification>>> getMyNotifications(Principal principal) {
-        
-        // Giống logic check header trong /logout
+    @GetMapping("/my-notifications")
+    public ResponseEntity<ApiResponse<List<NotificationResponse>>> getAllMyNotifications(Principal principal) {
         if (principal == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
-                ApiResponse.<List<Notification>>builder()
-                        .code(1001) // Giả sử 1001 là lỗi "Chưa xác thực"
+                ApiResponse.<List<NotificationResponse>>builder()
+                        .code(1001)
                         .message("User not authenticated")
                         .build()
             );
         }
         
-        String userId = principal.getName();
-        List<Notification> history = notificationService.getHistoryForUser(userId);
+        String userId = getUserIdFromPrincipal(principal);
+        List<NotificationResponse> notifications = notificationService.getAllNotificationsForUser(userId);
         
-        // Trả về 200 OK với kết quả
         return ResponseEntity.ok(
-            ApiResponse.<List<Notification>>builder()
-                    .result(history)
+            ApiResponse.<List<NotificationResponse>>builder()
+                    .result(notifications)
                     .build()
         );
     }
 
     /**
-     * API đánh dấu ĐÃ ĐỌC (dùng bởi client đã đăng nhập)
-     * Trả về ResponseEntity (giống /logout) vì có nhiều logic fail
+     * API lấy số lượng notification chưa đọc
+     */
+    @GetMapping("/unread-count")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> getUnreadCount(Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                ApiResponse.<Map<String, Long>>builder()
+                        .code(1001)
+                        .message("User not authenticated")
+                        .build()
+            );
+        }
+        
+        String userId = getUserIdFromPrincipal(principal);
+        long count = notificationService.countUnreadNotifications(userId);
+        
+        Map<String, Long> result = new HashMap<>();
+        result.put("unreadCount", count);
+        
+        return ResponseEntity.ok(
+            ApiResponse.<Map<String, Long>>builder()
+                    .result(result)
+                    .build()
+        );
+    }
+
+    /**
+     * API lấy danh sách notification chưa đọc
+     */
+    @GetMapping("/unread")
+    public ResponseEntity<ApiResponse<List<NotificationResponse>>> getUnreadNotifications(Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                ApiResponse.<List<NotificationResponse>>builder()
+                        .code(1001)
+                        .message("User not authenticated")
+                        .build()
+            );
+        }
+        
+        String userId = getUserIdFromPrincipal(principal);
+        List<NotificationResponse> notifications = notificationService.getUnreadNotificationsForUser(userId);
+        
+        return ResponseEntity.ok(
+            ApiResponse.<List<NotificationResponse>>builder()
+                    .result(notifications)
+                    .build()
+        );
+    }
+
+    /**
+     * API đánh dấu một notification là ĐÃ ĐỌC
      */
     @PutMapping("/{notificationId}/read")
     public ResponseEntity<ApiResponse<Void>> markAsRead(
@@ -115,33 +202,61 @@ public class NotificationController {
         }
         
         try {
-            String userId = principal.getName();
+            String userId = getUserIdFromPrincipal(principal);
             boolean success = notificationService.markAsRead(notificationId, userId);
             
             if (success) {
-                // 200 OK
                 return ResponseEntity.ok(
                     ApiResponse.<Void>builder()
                             .message("Notification marked as read")
                             .build()
                 );
             } else {
-                // 404 Not Found
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
                     ApiResponse.<Void>builder()
-                            .code(1004) // Giả sử 1004 là "Not Found"
+                            .code(1004)
                             .message("Notification not found")
                             .build()
                 );
             }
         } catch (SecurityException e) {
-            // 403 Forbidden
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
                 ApiResponse.<Void>builder()
-                        .code(1003) // Giả sử 1003 là "Không có quyền"
+                        .code(1003)
                         .message(e.getMessage())
                         .build()
             );
         }
+    }
+
+    /**
+     * API đánh dấu TẤT CẢ notifications là đã đọc (toggle)
+     * Nếu tất cả đã đọc -> đánh dấu tất cả là chưa đọc
+     * Nếu có ít nhất 1 chưa đọc -> đánh dấu tất cả là đã đọc
+     */
+    @PutMapping("/read-all")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> markAllAsRead(Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                ApiResponse.<Map<String, Object>>builder()
+                        .code(1001)
+                        .message("User not authenticated")
+                        .build()
+            );
+        }
+        
+        String userId = getUserIdFromPrincipal(principal);
+        int updatedCount = notificationService.toggleMarkAllAsRead(userId);
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("updatedCount", updatedCount);
+        result.put("message", "All notifications toggled");
+        
+        return ResponseEntity.ok(
+            ApiResponse.<Map<String, Object>>builder()
+                    .result(result)
+                    .message("Successfully toggled " + updatedCount + " notifications")
+                    .build()
+        );
     }
 }

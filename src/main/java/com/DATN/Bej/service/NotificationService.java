@@ -2,9 +2,9 @@ package com.DATN.Bej.service;
 
 import com.DATN.Bej.dto.ApiNotificationRequest;
 import com.DATN.Bej.dto.NotificationPayload;
+import com.DATN.Bej.dto.response.NotificationResponse;
 import com.DATN.Bej.entity.Notification;
 import com.DATN.Bej.entity.identity.User;
-import com.DATN.Bej.enums.NotificationType;
 import com.DATN.Bej.repository.NotificationRepository;
 import com.DATN.Bej.repository.UserRepository;
 import com.DATN.Bej.service.FcmDeviceTokenService;
@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -41,8 +42,13 @@ public class NotificationService {
      * Tạo và gửi thông báo cá nhân cho một user
      * Thực hiện 3 công việc:
      * 1. Lưu thông báo vào database
-     * 2. Gửi qua WebSocket
+     * 2. Gửi qua WebSocket (RabbitMQ STOMP broker)
      * 3. Gửi qua Firebase (nếu user có FCM token)
+     * 
+     * Method này được sử dụng bởi:
+     * - Event Listener: NotificationSendEvent, OrderStatusUpdateEvent
+     * - API: NotificationController.sendToUserById()
+     * - Internal: sendNotificationsToMultipleUsers()
      * 
      * @param userId ID của user nhận thông báo
      * @param request Thông tin thông báo
@@ -112,8 +118,12 @@ public class NotificationService {
      * Gửi thông báo broadcast cho tất cả users
      * Thực hiện 3 công việc:
      * 1. Lưu thông báo vào database cho tất cả users
-     * 2. Gửi qua WebSocket (broadcast)
+     * 2. Gửi qua WebSocket (broadcast - RabbitMQ STOMP broker)
      * 3. Gửi qua Firebase cho tất cả users có FCM token
+     * 
+     * Method này được sử dụng bởi:
+     * - Event Listener: BroadcastNotificationEvent
+     * - API: NotificationController.sendBroadcastNotification()
      * 
      * @param request Thông tin thông báo
      */
@@ -182,10 +192,45 @@ public class NotificationService {
     }
     
 
-    public List<Notification> getHistoryForUser(String userId) {
-        return notificationRepository.findByRecipient_IdOrderByCreatedAtDesc(userId);
+    /**
+     * Lấy tất cả notifications của user
+     * @param userId ID của user
+     * @return Danh sách NotificationResponse
+     */
+    public List<NotificationResponse> getAllNotificationsForUser(String userId) {
+        List<Notification> notifications = notificationRepository.findByRecipient_IdOrderByCreatedAtDesc(userId);
+        return notifications.stream()
+                .map(this::toNotificationResponse)
+                .collect(Collectors.toList());
     }
 
+    /**
+     * Đếm số notification chưa đọc của user
+     * @param userId ID của user
+     * @return Số lượng notification chưa đọc
+     */
+    public long countUnreadNotifications(String userId) {
+        return notificationRepository.countByRecipient_IdAndIsReadFalse(userId);
+    }
+
+    /**
+     * Lấy danh sách notification chưa đọc của user
+     * @param userId ID của user
+     * @return Danh sách NotificationResponse chưa đọc
+     */
+    public List<NotificationResponse> getUnreadNotificationsForUser(String userId) {
+        List<Notification> notifications = notificationRepository.findByRecipient_IdAndIsReadFalseOrderByCreatedAtDesc(userId);
+        return notifications.stream()
+                .map(this::toNotificationResponse)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Đánh dấu một notification là đã đọc
+     * @param notificationId ID của notification
+     * @param userId ID của user
+     * @return true nếu thành công, false nếu không tìm thấy
+     */
     @Transactional
     public boolean markAsRead(String notificationId, String userId) {
         Optional<Notification> notifOpt = notificationRepository.findById(notificationId);
@@ -201,5 +246,92 @@ public class NotificationService {
         notification.setRead(true);
         notificationRepository.save(notification);
         return true;
+    }
+
+    /**
+     * Đánh dấu tất cả notifications của user là đã đọc (toggle)
+     * Nếu tất cả đã đọc -> đánh dấu tất cả là chưa đọc
+     * Nếu có ít nhất 1 chưa đọc -> đánh dấu tất cả là đã đọc
+     * @param userId ID của user
+     * @return Số lượng notifications đã được cập nhật
+     */
+    @Transactional
+    public int toggleMarkAllAsRead(String userId) {
+        List<Notification> allNotifications = notificationRepository.findByRecipient_IdOrderByCreatedAtDesc(userId);
+        
+        if (allNotifications.isEmpty()) {
+            return 0;
+        }
+
+        // Kiểm tra xem có notification nào chưa đọc không
+        boolean hasUnread = allNotifications.stream().anyMatch(n -> !n.isRead());
+        
+        // Nếu có notification chưa đọc -> đánh dấu tất cả là đã đọc
+        // Nếu tất cả đã đọc -> đánh dấu tất cả là chưa đọc
+        boolean targetReadStatus = hasUnread;
+        
+        for (Notification notification : allNotifications) {
+            notification.setRead(targetReadStatus);
+        }
+        
+        notificationRepository.saveAll(allNotifications);
+        log.info("✅ Toggled all notifications for user {} - New status: {}, Count: {}", 
+                userId, targetReadStatus ? "READ" : "UNREAD", allNotifications.size());
+        
+        return allNotifications.size();
+    }
+
+    /**
+     * Gửi notification cho nhiều người
+     * Method này gọi createAndSendPersonalNotification() cho mỗi user,
+     * đảm bảo mỗi notification được:
+     * 1. Lưu vào database
+     * 2. Gửi qua WebSocket (RabbitMQ STOMP broker)
+     * 3. Gửi qua Firebase (nếu user có FCM token)
+     * 
+     * @param userIds Danh sách ID của các users
+     * @param request Thông tin notification
+     */
+    @Transactional
+    public void sendNotificationsToMultipleUsers(List<String> userIds, ApiNotificationRequest request) {
+        log.info("📨 Sending notification to {} users - Title: {}", userIds.size(), request.title());
+        
+        int successCount = 0;
+        int failCount = 0;
+        
+        for (String userId : userIds) {
+            try {
+                createAndSendPersonalNotification(userId, request);
+                successCount++;
+            } catch (Exception e) {
+                log.error("❌ Failed to send notification to user {}: {}", userId, e.getMessage());
+                failCount++;
+            }
+        }
+        
+        log.info("✅ Sent notifications to multiple users - Success: {}, Failed: {}", successCount, failCount);
+    }
+
+    /**
+     * Convert Notification entity to NotificationResponse DTO
+     */
+    private NotificationResponse toNotificationResponse(Notification notification) {
+        return NotificationResponse.builder()
+                .id(notification.getId())
+                .type(notification.getType())
+                .title(notification.getTitle())
+                .body(notification.getBody())
+                .isRead(notification.isRead())
+                .resourceId(notification.getResourceId())
+                .createdAt(notification.getCreatedAt())
+                .build();
+    }
+
+    /**
+     * Deprecated: Sử dụng getAllNotificationsForUser thay thế
+     */
+    @Deprecated
+    public List<Notification> getHistoryForUser(String userId) {
+        return notificationRepository.findByRecipient_IdOrderByCreatedAtDesc(userId);
     }
 }
