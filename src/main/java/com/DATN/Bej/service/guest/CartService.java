@@ -6,6 +6,7 @@ import com.DATN.Bej.dto.response.cart.OrderDetailsResponse;
 import com.DATN.Bej.dto.response.cart.OrdersResponse;
 import com.DATN.Bej.entity.cart.CartItem;
 import com.DATN.Bej.entity.cart.OrderItem;
+import com.DATN.Bej.entity.cart.OrderNote;
 import com.DATN.Bej.entity.cart.Orders;
 import com.DATN.Bej.entity.identity.User;
 import com.DATN.Bej.entity.product.ProductAttribute;
@@ -26,8 +27,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -171,6 +174,8 @@ public class CartService {
             orderItem.setPrice(productAtt.getFinalPrice());
             cartItemRepository.deleteById(itemReq.getCartItemId());
 
+//            productAttributeRepository.increaseSoldQuantity(UUID.fromString(productAtt.getId()), orderItem.getQuantity());
+
             orderItems.add(orderItem);
         }
         double totalPrice = orderItems.stream()
@@ -218,6 +223,25 @@ public class CartService {
         
         log.info("Order details retrieved - Order: {}, User: {}", orderId, phoneNumber);
         return orderMapper.toOrderDetailsResponse(order);
+    }
+
+    public OrdersResponse confirmRepairOrder(String orderId){
+        Orders order = ordersRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        var context = SecurityContextHolder.getContext();
+        String name = context.getAuthentication().getName();
+        User user = userRepository.findByPhoneNumber(name).orElseThrow(
+                () -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        order.setStatus(2);
+        OrderNote newNote = new OrderNote();
+        newNote.setOrder(order);
+        newNote.setNote("Khách hàng xác nhận đơn sửa chữa");
+        newNote.setUpdateTime(LocalDateTime.now());
+        newNote.setUpdateBy(user);
+        order.getOrderNotes().add(newNote);
+
+        return orderMapper.toOrdersResponse(order);
     }
 
     //  ======================================================================================

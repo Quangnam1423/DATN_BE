@@ -2,15 +2,14 @@ package com.DATN.Bej.controller.order;
 
 import com.DATN.Bej.dto.request.ApiResponse;
 import com.DATN.Bej.dto.response.cart.OrderDetailsResponse;
+import com.DATN.Bej.dto.response.cart.OrdersResponse;
+import com.DATN.Bej.dto.response.order.OrderStatusUpdateResponse;
 import com.DATN.Bej.service.guest.CartService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -67,6 +66,13 @@ public class OrderController {
         log.info("✅ Order details retrieved - ID: {}", orderId);
         return ApiResponse.<OrderDetailsResponse>builder()
                 .result(result)
+                .build();
+    }
+
+    @PutMapping("/repair-order/{orderId}/confirm")
+    ApiResponse<OrdersResponse> confirmRepairOrder(@PathVariable String orderId){
+        return ApiResponse.<OrdersResponse>builder()
+                .result(cartService.confirmRepairOrder(orderId))
                 .build();
     }
 }

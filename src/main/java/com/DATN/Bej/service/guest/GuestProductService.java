@@ -23,7 +23,7 @@ public class GuestProductService {
     ProductRepository productRepository;
 
     public ProductDetailRes getProductDetails(String productId){
-        return productMapper.toProductDetailResponse(productRepository.findByIdWithDetails(productId)
+        return productMapper.toProductDetailResponse(productRepository.findById(productId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED)));
     }
 
