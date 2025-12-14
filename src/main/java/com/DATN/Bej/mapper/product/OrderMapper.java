@@ -4,8 +4,10 @@ import com.DATN.Bej.dto.request.cartRequest.OrderItemRequest;
 import com.DATN.Bej.dto.request.cartRequest.OrderRequest;
 import com.DATN.Bej.dto.response.cart.OrderDetailsResponse;
 import com.DATN.Bej.dto.response.cart.OrderItemResponse;
+import com.DATN.Bej.dto.response.cart.OrderNoteResponse;
 import com.DATN.Bej.dto.response.cart.OrdersResponse;
 import com.DATN.Bej.entity.cart.OrderItem;
+import com.DATN.Bej.entity.cart.OrderNote;
 import com.DATN.Bej.entity.cart.Orders;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -19,6 +21,9 @@ public interface OrderMapper {
     OrdersResponse toOrdersResponse(Orders orders);
     @Mapping(target = "userName", source = "user.fullName")
     OrderDetailsResponse toOrderDetailsResponse(Orders orders);
+
+    @Mapping(target = "userName", source = "updateBy.fullName")
+    OrderNoteResponse toOrderNoteResponse(OrderNote orderNote);
 
     @Mapping(target = "productA", ignore = true)
     OrderItem toOrderItem(OrderItemRequest request);

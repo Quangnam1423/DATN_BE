@@ -26,7 +26,11 @@ public class OrderDetailsResponse {
 
     String description;
 
+    int type;
+    int status;
+
     double totalPrice;
 
     List<OrderItemResponse> orderItems = new ArrayList<>();
+    List<OrderNoteResponse> orderNotes = new ArrayList<>();
 }

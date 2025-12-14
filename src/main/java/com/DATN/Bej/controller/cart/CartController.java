@@ -191,4 +191,14 @@ public class CartController {
                 .result(result)
                 .build();
     }
+
+//    @PutMapping("/repair/{orderId}/confirm")
+//    ApiResponse<OrderDetailsResponse> confirmRepairOrder(@PathVariable String orderId){
+//
+//        OrderDetailsResponse result = cartService.confirmRepairOrder(String orderId);
+//
+//        return ApiResponse.<OrderDetailsResponse>builder()
+//                .result(result)
+//                .build();
+//    }
 }

@@ -1,6 +1,7 @@
 package com.DATN.Bej.controller.cart;
 
 import com.DATN.Bej.dto.request.ApiResponse;
+import com.DATN.Bej.dto.request.cartRequest.OrderItemsUpdateRequest;
 import com.DATN.Bej.dto.request.order.UpdateOrderStatusRequest;
 import com.DATN.Bej.dto.response.cart.OrderDetailsResponse;
 import com.DATN.Bej.dto.response.cart.OrdersResponse;
@@ -95,6 +96,13 @@ public class OrdersManageController {
         
         return ApiResponse.<OrderStatusUpdateResponse>builder()
                 .result(result)
+                .build();
+    }
+
+    @PutMapping("/{orderId}/items")
+    ApiResponse<OrderDetailsResponse> updateOrderItems(@PathVariable String orderId, @RequestBody OrderItemsUpdateRequest request){
+        return ApiResponse.<OrderDetailsResponse>builder()
+                .result(orderService.updateOrderItems(orderId, request))
                 .build();
     }
 }

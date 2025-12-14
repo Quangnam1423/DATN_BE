@@ -10,17 +10,8 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class OrderRequest {
+public class OrderItemsUpdateRequest {
 
-    String phoneNumber;
-    String email;
-    String address;
-
-    String description;
-
-    int type;
-
-    double totalPrice;
     List<OrderItemRequest> items;
 
 }
