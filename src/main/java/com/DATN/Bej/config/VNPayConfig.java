@@ -18,6 +18,7 @@ import lombok.Data;
 public class VNPayConfig {
     private String payUrl;
     private String returnUrl;
+    private String ipnUrl;
     private String tmnCode;
     private String hashSecret;
     private String apiUrl;

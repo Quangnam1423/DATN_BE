@@ -53,6 +53,13 @@ firebase:
 jwt:
   signerKey: "7bZydhCMPlM7eKuKjxy1gIhbtMo7hTPNvYJr2FguJZtvxpeQ21K3MjP90WjNtYLO"
 
+vnpay:
+  payUrl: ${VNPAY_PAY_URL}
+  returnUrl: ${VNPAY_RETURN_URL}
+  ipnUrl: ${VNPAY_IPN_URL}
+  tmnCode: ${VNPAY_TMN_CODE}
+  hashSecret: ${VNPAY_HASH_SECRET}
+
 logging:
   level:
     root: INFO
