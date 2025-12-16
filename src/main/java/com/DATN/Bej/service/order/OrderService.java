@@ -2,6 +2,11 @@ package com.DATN.Bej.service.order;
 
 import com.DATN.Bej.dto.request.cartRequest.OrderItemsUpdateRequest;
 import com.DATN.Bej.dto.request.order.UpdateOrderStatusRequest;
+import com.DATN.Bej.dto.response.OrderStatisticsResponse;
+import com.DATN.Bej.dto.response.RevenueStatisticsResponse;
+import com.DATN.Bej.dto.response.TopProductResponse;
+import com.DATN.Bej.dto.response.TopRepairServiceResponse;
+import com.DATN.Bej.dto.response.WeeklyRevenueResponse;
 import com.DATN.Bej.dto.response.cart.OrderDetailsResponse;
 import com.DATN.Bej.dto.response.order.OrderStatusUpdateResponse;
 import com.DATN.Bej.entity.cart.OrderItem;
@@ -14,6 +19,7 @@ import com.DATN.Bej.exception.AppException;
 import com.DATN.Bej.exception.ErrorCode;
 import com.DATN.Bej.mapper.product.OrderMapper;
 import com.DATN.Bej.repository.UserRepository;
+import com.DATN.Bej.repository.product.OrderItemRepository;
 import com.DATN.Bej.repository.product.OrderRepository;
 import com.DATN.Bej.repository.product.ProductAttributeRepository;
 import lombok.AccessLevel;
@@ -28,7 +34,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.temporal.WeekFields;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Locale;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -43,6 +54,7 @@ public class OrderService {
     OrderMapper orderMapper;
 
     OrderRepository orderRepository;
+    OrderItemRepository orderItemRepository;
     SimpMessagingTemplate messagingTemplate;
     ApplicationEventPublisher eventPublisher;
 
@@ -176,6 +188,353 @@ public class OrderService {
             case 5 -> "Đã hoàn thành";
             default -> "Không xác định";
         };
+    }
+    
+    /**
+     * Thống kê doanh thu theo tháng
+     * @param year Năm cần thống kê
+     * @param month Tháng cần thống kê (1-12), null nếu thống kê cả năm
+     * @return RevenueStatisticsResponse chứa thông tin thống kê
+     */
+    public RevenueStatisticsResponse getRevenueStatistics(int year, Integer month) {
+        log.info("📊 Getting revenue statistics - Year: {}, Month: {}", year, month);
+        
+        if (month != null && (month < 1 || month > 12)) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
+        
+        if (month != null) {
+            // Thống kê theo tháng cụ thể
+            return getMonthlyRevenue(year, month);
+        } else {
+            // Thống kê cả năm
+            return getYearlyRevenue(year);
+        }
+    }
+    
+    /**
+     * Thống kê doanh thu theo tháng cụ thể
+     */
+    private RevenueStatisticsResponse getMonthlyRevenue(int year, int month) {
+        YearMonth yearMonth = YearMonth.of(year, month);
+        LocalDate startDate = yearMonth.atDay(1);
+        LocalDate endDate = yearMonth.atEndOfMonth();
+        
+        Double totalRevenue = orderRepository.sumTotalPriceByOrderAtBetweenAndStatus(startDate, endDate);
+        Long totalOrders = orderRepository.countByOrderAtBetweenAndStatus(startDate, endDate);
+        
+        if (totalRevenue == null) {
+            totalRevenue = 0.0;
+        }
+        
+        return RevenueStatisticsResponse.builder()
+                .year(year)
+                .month(month)
+                .totalRevenue(totalRevenue)
+                .totalOrders(totalOrders != null ? totalOrders : 0)
+                .monthlyRevenues(null)
+                .build();
+    }
+    
+    /**
+     * Thống kê doanh thu cả năm (theo từng tháng)
+     */
+    private RevenueStatisticsResponse getYearlyRevenue(int year) {
+        List<RevenueStatisticsResponse.MonthlyRevenue> monthlyRevenues = new ArrayList<>();
+        double totalYearRevenue = 0.0;
+        long totalYearOrders = 0;
+        
+        // Tính doanh thu cho từng tháng
+        for (int m = 1; m <= 12; m++) {
+            YearMonth yearMonth = YearMonth.of(year, m);
+            LocalDate monthStart = yearMonth.atDay(1);
+            LocalDate monthEnd = yearMonth.atEndOfMonth();
+            
+            Double monthRevenue = orderRepository.sumTotalPriceByOrderAtBetweenAndStatus(monthStart, monthEnd);
+            Long monthOrders = orderRepository.countByOrderAtBetweenAndStatus(monthStart, monthEnd);
+            
+            if (monthRevenue == null) {
+                monthRevenue = 0.0;
+            }
+            if (monthOrders == null) {
+                monthOrders = 0L;
+            }
+            
+            totalYearRevenue += monthRevenue;
+            totalYearOrders += monthOrders;
+            
+            monthlyRevenues.add(RevenueStatisticsResponse.MonthlyRevenue.builder()
+                    .month(m)
+                    .monthName("Tháng " + m)
+                    .revenue(monthRevenue)
+                    .orderCount(monthOrders)
+                    .build());
+        }
+        
+        return RevenueStatisticsResponse.builder()
+                .year(year)
+                .month(null)
+                .totalRevenue(totalYearRevenue)
+                .totalOrders(totalYearOrders)
+                .monthlyRevenues(monthlyRevenues)
+                .build();
+    }
+    
+    /**
+     * Thống kê doanh thu theo tuần
+     * @param year Năm
+     * @param week Số tuần trong năm (1-53)
+     * @return WeeklyRevenueResponse
+     */
+    public WeeklyRevenueResponse getWeeklyRevenueStatistics(int year, int week) {
+        log.info("📊 Getting weekly revenue statistics - Year: {}, Week: {}", year, week);
+        
+        if (week < 1 || week > 53) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
+        
+        WeekFields weekFields = WeekFields.of(Locale.getDefault());
+        LocalDate firstDayOfYear = LocalDate.of(year, 1, 1);
+        LocalDate weekStart = firstDayOfYear.with(weekFields.weekOfWeekBasedYear(), week)
+                                            .with(weekFields.dayOfWeek(), 1);
+        LocalDate weekEnd = weekStart.plusDays(6);
+        
+        // Đảm bảo không vượt quá năm hiện tại
+        if (weekStart.getYear() != year) {
+            weekStart = LocalDate.of(year, 1, 1);
+        }
+        if (weekEnd.getYear() != year) {
+            weekEnd = LocalDate.of(year, 12, 31);
+        }
+        
+        Double totalRevenue = orderRepository.sumTotalPriceByOrderAtBetweenAndStatus(weekStart, weekEnd);
+        Long totalOrders = orderRepository.countByOrderAtBetweenAndStatus(weekStart, weekEnd);
+        
+        if (totalRevenue == null) {
+            totalRevenue = 0.0;
+        }
+        if (totalOrders == null) {
+            totalOrders = 0L;
+        }
+        
+        // Tính doanh thu theo từng ngày trong tuần
+        List<WeeklyRevenueResponse.DailyRevenue> dailyRevenues = new ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            LocalDate day = weekStart.plusDays(i);
+            if (day.isAfter(weekEnd)) break;
+            
+            Double dayRevenue = orderRepository.sumTotalPriceByOrderAtBetweenAndStatus(day, day);
+            Long dayOrders = orderRepository.countByOrderAtBetweenAndStatus(day, day);
+            
+            if (dayRevenue == null) {
+                dayRevenue = 0.0;
+            }
+            if (dayOrders == null) {
+                dayOrders = 0L;
+            }
+            
+            dailyRevenues.add(WeeklyRevenueResponse.DailyRevenue.builder()
+                    .day(day.getDayOfMonth())
+                    .date(day.toString())
+                    .revenue(dayRevenue)
+                    .orderCount(dayOrders)
+                    .build());
+        }
+        
+        String weekRange = weekStart.toString() + " - " + weekEnd.toString();
+        
+        return WeeklyRevenueResponse.builder()
+                .year(year)
+                .week(week)
+                .weekRange(weekRange)
+                .totalRevenue(totalRevenue)
+                .totalOrders(totalOrders)
+                .dailyRevenues(dailyRevenues)
+                .build();
+    }
+    
+    /**
+     * Thống kê số đơn mua bán và sửa chữa
+     * @param year Năm (tùy chọn)
+     * @param month Tháng (tùy chọn)
+     * @param week Tuần (tùy chọn)
+     * @return OrderStatisticsResponse
+     */
+    public OrderStatisticsResponse getOrderStatistics(Integer year, Integer month, Integer week) {
+        log.info("📊 Getting order statistics - Year: {}, Month: {}, Week: {}", year, month, week);
+        
+        LocalDate startDate;
+        LocalDate endDate;
+        
+        if (week != null && year != null) {
+            // Thống kê theo tuần
+            WeekFields weekFields = WeekFields.of(Locale.getDefault());
+            LocalDate firstDayOfYear = LocalDate.of(year, 1, 1);
+            startDate = firstDayOfYear.with(weekFields.weekOfWeekBasedYear(), week)
+                                      .with(weekFields.dayOfWeek(), 1);
+            endDate = startDate.plusDays(6);
+            if (startDate.getYear() != year) {
+                startDate = LocalDate.of(year, 1, 1);
+            }
+            if (endDate.getYear() != year) {
+                endDate = LocalDate.of(year, 12, 31);
+            }
+        } else if (month != null && year != null) {
+            // Thống kê theo tháng
+            YearMonth yearMonth = YearMonth.of(year, month);
+            startDate = yearMonth.atDay(1);
+            endDate = yearMonth.atEndOfMonth();
+        } else if (year != null) {
+            // Thống kê theo năm
+            startDate = LocalDate.of(year, 1, 1);
+            endDate = LocalDate.of(year, 12, 31);
+        } else {
+            // Thống kê tất cả
+            startDate = LocalDate.of(2000, 1, 1);
+            endDate = LocalDate.now();
+        }
+        
+        Long purchaseOrders = orderRepository.countByOrderAtBetweenAndStatusAndType(startDate, endDate, 0);
+        Long repairOrders = orderRepository.countByOrderAtBetweenAndStatusAndType(startDate, endDate, 1);
+        
+        if (purchaseOrders == null) purchaseOrders = 0L;
+        if (repairOrders == null) repairOrders = 0L;
+        
+        return OrderStatisticsResponse.builder()
+                .totalPurchaseOrders(purchaseOrders)
+                .totalRepairOrders(repairOrders)
+                .totalOrders(purchaseOrders + repairOrders)
+                .year(year)
+                .month(month)
+                .week(week)
+                .build();
+    }
+    
+    /**
+     * Thống kê các sản phẩm bán chạy nhất
+     * @param year Năm (tùy chọn)
+     * @param month Tháng (tùy chọn)
+     * @param limit Số lượng sản phẩm cần lấy (mặc định 10)
+     * @return TopProductResponse
+     */
+    public TopProductResponse getTopProducts(Integer year, Integer month, Integer limit) {
+        log.info("📊 Getting top products - Year: {}, Month: {}, Limit: {}", year, month, limit);
+        
+        if (limit == null || limit <= 0) {
+            limit = 10;
+        }
+        
+        LocalDate startDate;
+        LocalDate endDate;
+        
+        if (month != null && year != null) {
+            YearMonth yearMonth = YearMonth.of(year, month);
+            startDate = yearMonth.atDay(1);
+            endDate = yearMonth.atEndOfMonth();
+        } else if (year != null) {
+            startDate = LocalDate.of(year, 1, 1);
+            endDate = LocalDate.of(year, 12, 31);
+        } else {
+            // Lấy 1 năm gần nhất
+            endDate = LocalDate.now();
+            startDate = endDate.minusYears(1);
+        }
+        
+        List<Object[]> results = orderItemRepository.findTopProductsByDateRange(startDate, endDate);
+        
+        List<TopProductResponse.TopProductItem> products = new ArrayList<>();
+        int count = 0;
+        
+        for (Object[] result : results) {
+            if (count >= limit) break;
+            
+            String productAttributeId = (String) result[0];
+            Long totalSold = ((Number) result[1]).longValue();
+            Double totalRevenue = ((Number) result[2]).doubleValue();
+            
+            ProductAttribute productAttribute = productAttributeRepository.findById(productAttributeId)
+                    .orElse(null);
+            
+            if (productAttribute != null && productAttribute.getVariant() != null 
+                && productAttribute.getVariant().getProduct() != null) {
+                String productId = productAttribute.getVariant().getProduct().getId();
+                String productName = productAttribute.getVariant().getProduct().getName();
+                String productAttributeName = productAttribute.getName();
+                String image = productAttribute.getVariant().getProduct().getImage();
+                
+                products.add(TopProductResponse.TopProductItem.builder()
+                        .productId(productId)
+                        .productName(productName)
+                        .productAttributeId(productAttributeId)
+                        .productAttributeName(productAttributeName)
+                        .totalSold(totalSold)
+                        .totalRevenue(totalRevenue)
+                        .image(image)
+                        .build());
+                count++;
+            }
+        }
+        
+        return TopProductResponse.builder()
+                .products(products)
+                .limit(limit)
+                .build();
+    }
+    
+    /**
+     * Thống kê các dịch vụ sửa chữa được dùng nhiều nhất
+     * @param year Năm (tùy chọn)
+     * @param month Tháng (tùy chọn)
+     * @param limit Số lượng dịch vụ cần lấy (mặc định 10)
+     * @return TopRepairServiceResponse
+     */
+    public TopRepairServiceResponse getTopRepairServices(Integer year, Integer month, Integer limit) {
+        log.info("📊 Getting top repair services - Year: {}, Month: {}, Limit: {}", year, month, limit);
+        
+        if (limit == null || limit <= 0) {
+            limit = 10;
+        }
+        
+        LocalDate startDate;
+        LocalDate endDate;
+        
+        if (month != null && year != null) {
+            YearMonth yearMonth = YearMonth.of(year, month);
+            startDate = yearMonth.atDay(1);
+            endDate = yearMonth.atEndOfMonth();
+        } else if (year != null) {
+            startDate = LocalDate.of(year, 1, 1);
+            endDate = LocalDate.of(year, 12, 31);
+        } else {
+            // Lấy 1 năm gần nhất
+            endDate = LocalDate.now();
+            startDate = endDate.minusYears(1);
+        }
+        
+        List<Object[]> results = orderRepository.findTopRepairServicesByDateRange(startDate, endDate);
+        
+        List<TopRepairServiceResponse.TopRepairServiceItem> services = new ArrayList<>();
+        int count = 0;
+        
+        for (Object[] result : results) {
+            if (count >= limit) break;
+            
+            String description = (String) result[0];
+            Long usageCount = ((Number) result[1]).longValue();
+            Double totalRevenue = ((Number) result[2]).doubleValue();
+            
+            services.add(TopRepairServiceResponse.TopRepairServiceItem.builder()
+                    .serviceDescription(description)
+                    .usageCount(usageCount)
+                    .totalRevenue(totalRevenue)
+                    .build());
+            count++;
+        }
+        
+        return TopRepairServiceResponse.builder()
+                .services(services)
+                .limit(limit)
+                .build();
     }
 }
 

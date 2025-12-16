@@ -3,6 +3,11 @@ package com.DATN.Bej.controller.cart;
 import com.DATN.Bej.dto.request.ApiResponse;
 import com.DATN.Bej.dto.request.cartRequest.OrderItemsUpdateRequest;
 import com.DATN.Bej.dto.request.order.UpdateOrderStatusRequest;
+import com.DATN.Bej.dto.response.OrderStatisticsResponse;
+import com.DATN.Bej.dto.response.RevenueStatisticsResponse;
+import com.DATN.Bej.dto.response.TopProductResponse;
+import com.DATN.Bej.dto.response.TopRepairServiceResponse;
+import com.DATN.Bej.dto.response.WeeklyRevenueResponse;
 import com.DATN.Bej.dto.response.cart.OrderDetailsResponse;
 import com.DATN.Bej.dto.response.cart.OrdersResponse;
 import com.DATN.Bej.dto.response.order.OrderStatusUpdateResponse;
@@ -103,6 +108,161 @@ public class OrdersManageController {
     ApiResponse<OrderDetailsResponse> updateOrderItems(@PathVariable String orderId, @RequestBody OrderItemsUpdateRequest request){
         return ApiResponse.<OrderDetailsResponse>builder()
                 .result(orderService.updateOrderItems(orderId, request))
+                .build();
+    }
+    
+    /**
+     * GET /manage/orders/revenue-statistics
+     * Thống kê doanh thu theo tháng cho admin
+     * Yêu cầu: ROLE_ADMIN
+     * 
+     * @param year Năm cần thống kê (bắt buộc)
+     * @param month Tháng cần thống kê (1-12, tùy chọn, null nếu muốn thống kê cả năm)
+     * @return RevenueStatisticsResponse với thông tin thống kê doanh thu
+     * 
+     * Ví dụ:
+     * - GET /manage/orders/revenue-statistics?year=2024&month=12 → Thống kê tháng 12/2024
+     * - GET /manage/orders/revenue-statistics?year=2024 → Thống kê cả năm 2024
+     */
+    @GetMapping("/revenue-statistics")
+    @PreAuthorize("hasRole('ADMIN')")
+    ApiResponse<RevenueStatisticsResponse> getRevenueStatistics(
+            @RequestParam int year,
+            @RequestParam(required = false) Integer month) {
+        log.info("📊 Admin getting revenue statistics - Year: {}, Month: {}", year, month);
+        
+        RevenueStatisticsResponse result = orderService.getRevenueStatistics(year, month);
+        
+        log.info("✅ Revenue statistics retrieved - Year: {}, Month: {}, Total Revenue: {}, Total Orders: {}", 
+                year, month, result.getTotalRevenue(), result.getTotalOrders());
+        
+        return ApiResponse.<RevenueStatisticsResponse>builder()
+                .result(result)
+                .build();
+    }
+    
+    /**
+     * GET /manage/orders/weekly-revenue-statistics
+     * Thống kê doanh thu theo tuần cho admin
+     * Yêu cầu: ROLE_ADMIN
+     * 
+     * @param year Năm cần thống kê (bắt buộc)
+     * @param week Số tuần trong năm (1-53, bắt buộc)
+     * @return WeeklyRevenueResponse với thông tin thống kê doanh thu theo tuần
+     * 
+     * Ví dụ:
+     * - GET /manage/orders/weekly-revenue-statistics?year=2024&week=12 → Thống kê tuần 12 năm 2024
+     */
+    @GetMapping("/weekly-revenue-statistics")
+    @PreAuthorize("hasRole('ADMIN')")
+    ApiResponse<WeeklyRevenueResponse> getWeeklyRevenueStatistics(
+            @RequestParam int year,
+            @RequestParam int week) {
+        log.info("📊 Admin getting weekly revenue statistics - Year: {}, Week: {}", year, week);
+        
+        WeeklyRevenueResponse result = orderService.getWeeklyRevenueStatistics(year, week);
+        
+        log.info("✅ Weekly revenue statistics retrieved - Year: {}, Week: {}, Total Revenue: {}, Total Orders: {}", 
+                year, week, result.getTotalRevenue(), result.getTotalOrders());
+        
+        return ApiResponse.<WeeklyRevenueResponse>builder()
+                .result(result)
+                .build();
+    }
+    
+    /**
+     * GET /manage/orders/order-statistics
+     * Thống kê số đơn mua bán và sửa chữa cho admin
+     * Yêu cầu: ROLE_ADMIN
+     * 
+     * @param year Năm cần thống kê (tùy chọn)
+     * @param month Tháng cần thống kê (1-12, tùy chọn)
+     * @param week Tuần cần thống kê (1-53, tùy chọn, cần có year)
+     * @return OrderStatisticsResponse với thông tin thống kê số đơn
+     * 
+     * Ví dụ:
+     * - GET /manage/orders/order-statistics?year=2024&month=12 → Thống kê tháng 12/2024
+     * - GET /manage/orders/order-statistics?year=2024&week=12 → Thống kê tuần 12 năm 2024
+     * - GET /manage/orders/order-statistics?year=2024 → Thống kê cả năm 2024
+     * - GET /manage/orders/order-statistics → Thống kê tất cả
+     */
+    @GetMapping("/order-statistics")
+    @PreAuthorize("hasRole('ADMIN')")
+    ApiResponse<OrderStatisticsResponse> getOrderStatistics(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer week) {
+        log.info("📊 Admin getting order statistics - Year: {}, Month: {}, Week: {}", year, month, week);
+        
+        OrderStatisticsResponse result = orderService.getOrderStatistics(year, month, week);
+        
+        log.info("✅ Order statistics retrieved - Purchase Orders: {}, Repair Orders: {}, Total: {}", 
+                result.getTotalPurchaseOrders(), result.getTotalRepairOrders(), result.getTotalOrders());
+        
+        return ApiResponse.<OrderStatisticsResponse>builder()
+                .result(result)
+                .build();
+    }
+    
+    /**
+     * GET /manage/orders/top-products
+     * Thống kê các sản phẩm bán chạy nhất cho admin
+     * Yêu cầu: ROLE_ADMIN
+     * 
+     * @param year Năm cần thống kê (tùy chọn)
+     * @param month Tháng cần thống kê (1-12, tùy chọn)
+     * @param limit Số lượng sản phẩm cần lấy (mặc định 10)
+     * @return TopProductResponse với danh sách sản phẩm bán chạy nhất
+     * 
+     * Ví dụ:
+     * - GET /manage/orders/top-products?year=2024&month=12&limit=5 → Top 5 sản phẩm tháng 12/2024
+     * - GET /manage/orders/top-products?year=2024&limit=20 → Top 20 sản phẩm năm 2024
+     */
+    @GetMapping("/top-products")
+    @PreAuthorize("hasRole('ADMIN')")
+    ApiResponse<TopProductResponse> getTopProducts(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer limit) {
+        log.info("📊 Admin getting top products - Year: {}, Month: {}, Limit: {}", year, month, limit);
+        
+        TopProductResponse result = orderService.getTopProducts(year, month, limit);
+        
+        log.info("✅ Top products retrieved - Count: {}", result.getProducts().size());
+        
+        return ApiResponse.<TopProductResponse>builder()
+                .result(result)
+                .build();
+    }
+    
+    /**
+     * GET /manage/orders/top-repair-services
+     * Thống kê các dịch vụ sửa chữa được dùng nhiều nhất cho admin
+     * Yêu cầu: ROLE_ADMIN
+     * 
+     * @param year Năm cần thống kê (tùy chọn)
+     * @param month Tháng cần thống kê (1-12, tùy chọn)
+     * @param limit Số lượng dịch vụ cần lấy (mặc định 10)
+     * @return TopRepairServiceResponse với danh sách dịch vụ sửa chữa được dùng nhiều nhất
+     * 
+     * Ví dụ:
+     * - GET /manage/orders/top-repair-services?year=2024&month=12&limit=5 → Top 5 dịch vụ tháng 12/2024
+     * - GET /manage/orders/top-repair-services?year=2024&limit=20 → Top 20 dịch vụ năm 2024
+     */
+    @GetMapping("/top-repair-services")
+    @PreAuthorize("hasRole('ADMIN')")
+    ApiResponse<TopRepairServiceResponse> getTopRepairServices(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer limit) {
+        log.info("📊 Admin getting top repair services - Year: {}, Month: {}, Limit: {}", year, month, limit);
+        
+        TopRepairServiceResponse result = orderService.getTopRepairServices(year, month, limit);
+        
+        log.info("✅ Top repair services retrieved - Count: {}", result.getServices().size());
+        
+        return ApiResponse.<TopRepairServiceResponse>builder()
+                .result(result)
                 .build();
     }
 }
