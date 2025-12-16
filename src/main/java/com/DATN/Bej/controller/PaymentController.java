@@ -4,6 +4,11 @@ import com.DATN.Bej.dto.request.ApiResponse;
 import com.DATN.Bej.dto.request.payment.CreatePaymentRequest;
 import com.DATN.Bej.dto.response.payment.PaymentCallbackResponse;
 import com.DATN.Bej.dto.response.payment.PaymentResponse;
+import com.DATN.Bej.dto.response.payment.PaymentStatusResponse;
+import com.DATN.Bej.entity.cart.Orders;
+import com.DATN.Bej.exception.AppException;
+import com.DATN.Bej.exception.ErrorCode;
+import com.DATN.Bej.repository.product.OrderRepository;
 import com.DATN.Bej.service.payment.VNPayService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -21,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 public class PaymentController {
     
     VNPayService vnPayService;
+    OrderRepository orderRepository;
 
     /**
      * POST /payment/create
@@ -75,43 +81,6 @@ public class PaymentController {
     }
     
     /**
-     * GET /payment/callback
-     * Callback từ VNPay sau khi thanh toán (user redirect về)
-     * Cập nhật trạng thái đơn hàng dựa trên kết quả thanh toán
-     * 
-     * @param request HttpServletRequest chứa các tham số từ VNPay
-     * @return PaymentCallbackResponse với thông tin kết quả thanh toán
-     * 
-     * VNPay sẽ redirect user về URL này với các tham số:
-     * - vnp_TransactionStatus: "00" = thành công
-     * - vnp_OrderInfo: "Thanh toan don hang {orderId}"
-     * - vnp_TransactionNo: mã giao dịch
-     * - vnp_PayDate: thời gian thanh toán
-     * - vnp_Amount: số tiền (đã nhân 100)
-     * - vnp_SecureHash: chữ ký để verify
-     * 
-     * Note: Đây là callback cho user, IPN callback (server-to-server) ở endpoint /ipn
-     */
-    @GetMapping("/callback")
-    ApiResponse<PaymentCallbackResponse> paymentCallback(HttpServletRequest request) {
-        log.info("📞 Payment callback received from VNPay (user redirect)");
-        
-        PaymentCallbackResponse callbackResponse = vnPayService.handlePaymentCallback(request);
-        
-        if (callbackResponse.isSuccess()) {
-            log.info("✅ Payment successful - Order: {}, Transaction: {}", 
-                    callbackResponse.getOrderId(), callbackResponse.getTransactionId());
-        } else {
-            log.warn("❌ Payment failed - Order: {}, Status: {}", 
-                    callbackResponse.getOrderId(), callbackResponse.getPaymentStatus());
-        }
-        
-        return ApiResponse.<PaymentCallbackResponse>builder()
-                .result(callbackResponse)
-                .build();
-    }
-    
-    /**
      * POST /payment/ipn
      * IPN (Instant Payment Notification) callback từ VNPay (server-to-server)
      * VNPay sẽ gọi endpoint này tự động để cập nhật trạng thái thanh toán
@@ -142,6 +111,77 @@ public class PaymentController {
         return ApiResponse.<PaymentCallbackResponse>builder()
                 .result(callbackResponse)
                 .build();
+    }
+    
+    /**
+     * GET /payment/status/{orderId}
+     * Lấy trạng thái thanh toán của đơn hàng
+     * Frontend có thể dùng API này để check xem đơn hàng đã thanh toán chưa
+     * 
+     * @param orderId ID của đơn hàng
+     * @return PaymentStatusResponse với thông tin trạng thái thanh toán
+     * 
+     * Use case:
+     * - Sau khi redirect user đến paymentUrl, frontend có thể polling API này
+     * - Hoặc sau khi user quay lại từ VNPay, frontend check status để hiển thị kết quả
+     * 
+     * Example:
+     * GET /payment/status/order-123
+     * 
+     * Response:
+     * {
+     *   "code": 1000,
+     *   "result": {
+     *     "orderId": "order-123",
+     *     "orderStatus": 2,
+     *     "statusName": "Đã thanh toán",
+     *     "isPaid": true,
+     *     "totalPrice": 30990000,
+     *     "message": "Order has been paid"
+     *   }
+     * }
+     */
+    @GetMapping("/status/{orderId}")
+    ApiResponse<PaymentStatusResponse> getPaymentStatus(@PathVariable String orderId) {
+        log.info("📊 Getting payment status for order: {}", orderId);
+        
+        Orders order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        
+        boolean isPaid = (order.getStatus() == 2 || order.getStatus() == 5);
+        String statusName = getStatusName(order.getStatus());
+        String message = isPaid ? "Order has been paid" : "Order payment pending";
+        
+        PaymentStatusResponse response = PaymentStatusResponse.builder()
+                .orderId(orderId)
+                .orderStatus(order.getStatus())
+                .statusName(statusName)
+                .isPaid(isPaid)
+                .totalPrice(order.getTotalPrice())
+                .message(message)
+                .build();
+        
+        log.info("✅ Payment status retrieved - Order: {}, Status: {}, IsPaid: {}", 
+                orderId, order.getStatus(), isPaid);
+        
+        return ApiResponse.<PaymentStatusResponse>builder()
+                .result(response)
+                .build();
+    }
+    
+    /**
+     * Lấy tên trạng thái đơn hàng
+     */
+    private String getStatusName(int status) {
+        return switch (status) {
+            case 0 -> "Chờ xử lý";
+            case 1 -> "Đã xác nhận";
+            case 2 -> "Đã thanh toán";
+            case 3 -> "Thanh toán thất bại";
+            case 4 -> "Đang giao hàng";
+            case 5 -> "Đã hoàn thành";
+            default -> "Không xác định";
+        };
     }
     
 }

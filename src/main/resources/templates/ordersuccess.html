@@ -3,54 +3,140 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <title>Thanh toán thành công</title>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .success-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 3rem;
+            max-width: 600px;
+            width: 100%;
+            margin: 2rem;
+        }
+        .success-icon {
+            width: 100px;
+            height: 100px;
+            background: #28a745;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 2rem;
+            animation: scaleIn 0.5s ease-out;
+        }
+        .success-icon i {
+            font-size: 50px;
+            color: white;
+        }
+        @keyframes scaleIn {
+            from {
+                transform: scale(0);
+            }
+            to {
+                transform: scale(1);
+            }
+        }
+        .info-table {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        .info-label {
+            font-weight: 600;
+            color: #495057;
+        }
+        .info-value {
+            color: #212529;
+            text-align: right;
+        }
+        .btn-home {
+            width: 100%;
+            padding: 0.75rem;
+            font-size: 1.1rem;
+            border-radius: 10px;
+            margin-top: 1.5rem;
+        }
+        .auto-redirect {
+            text-align: center;
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+    </style>
 </head>
 
 <body>
-<!-- back to top -->
-
-<!-- start body -->
-<div class="body py-5">
-    <div class="container">
-        <div class="w-50 m-auto">
-            <!-- Thêm lớp "my-4" để tạo ra khoảng cách trên và dưới tiêu đề trang -->
-            <h1 class="my-3 text-success text-center">Thanh toán thành công</h1>
-            <!-- Sử dụng lớp "alert" và "alert-danger" để tạo ra thông báo lỗi -->
-            <h2 class="my-2">Chi tiết đơn hàng</h2>
-            <!-- Sử dụng lớp "table" và "table-bordered" để tạo ra bảng hiển thị thông tin chi tiết đơn hàng -->
-            <table class="table table-bordered">
-                <tbody>
-                <tr>
-                    <td>Thông tin đơn hàng:</td>
-                    <td><span th:text="${orderId}">[order ID]</span></td>
-                </tr>
-                <tr>
-                    <td>Tổng tiền:</td>
-                    <td><span th:text="${totalPrice}">[total price]</span></td>
-                </tr>
-                <tr>
-                    <td>Thời gian thanh toán:</td>
-                    <td><span th:text="${paymentTime}">[payment time]</span></td>
-                </tr>
-                <tr>
-                    <td>Mã giao dịch:</td>
-                    <td><span th:text="${transactionId}">[transaction ID]</span></td>
-                </tr>
-                </tbody>
-            </table>
-            <a href="/" class="btn btn-primary">Về trang chủ</a>
+    <div class="success-card">
+        <div class="success-icon">
+            <i class="fas fa-check"></i>
+        </div>
+        <h1 class="text-center text-success mb-4">Thanh toán thành công!</h1>
+        <p class="text-center text-muted mb-4">Đơn hàng của bạn đã được thanh toán thành công</p>
+        
+        <div class="info-table">
+            <div class="info-row">
+                <span class="info-label">Mã đơn hàng:</span>
+                <span class="info-value" th:text="${orderId}">[order ID]</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Tổng tiền:</span>
+                <span class="info-value text-success fw-bold" th:text="${totalPrice}">[total price]</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Thời gian thanh toán:</span>
+                <span class="info-value" th:text="${paymentTime}">[payment time]</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Mã giao dịch:</span>
+                <span class="info-value" th:text="${transactionId}">[transaction ID]</span>
+            </div>
+        </div>
+        
+        <a th:href="${redirectUrl != null ? redirectUrl : '/'}" class="btn btn-success btn-lg btn-home" id="btnHome">
+            <i class="fas fa-home me-2"></i>Về trang chủ
+        </a>
+        
+        <div class="auto-redirect" th:if="${redirectUrl != null}">
+            <i class="fas fa-clock me-2"></i>
+            Tự động chuyển hướng sau <span id="countdown">5</span> giây...
         </div>
     </div>
-</div>
-<!-- end body -->
 
-
-<!-- start footer -->
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
-        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script th:if="${redirectUrl != null}">
+        let countdown = 5;
+        const countdownEl = document.getElementById('countdown');
+        const redirectUrl = /*[[${redirectUrl}]]*/ '/';
+        
+        const timer = setInterval(() => {
+            countdown--;
+            countdownEl.textContent = countdown;
+            if (countdown <= 0) {
+                clearInterval(timer);
+                window.location.href = redirectUrl;
+            }
+        }, 1000);
+    </script>
 </body>
-
 </html>
