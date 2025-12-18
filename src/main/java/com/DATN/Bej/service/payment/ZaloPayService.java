@@ -13,6 +13,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -163,6 +164,92 @@ public class ZaloPayService {
             throw new AppException(ErrorCode.INVALID_KEY);
         }
     }
+
+    /**
+     * Xử lý callback từ ZaloPay (server-to-server, method POST)
+     * Body callback:
+     * {
+     *   "data": "{...json string...}",
+     *   "mac": "hmac_sha256(key2, data)",
+     *   "type": 1
+     * }
+     *
+     * @param body Map body callback (data, mac, type)
+     * @return true nếu xử lý thành công và MAC hợp lệ
+     */
+    public boolean handleCallback(Map<String, Object> body) {
+        try {
+            log.info("📞 ZaloPay callback body: {}", objectMapper.writeValueAsString(body));
+
+            String data = (String) body.get("data");
+            String mac = (String) body.get("mac");
+
+            if (data == null || mac == null) {
+                log.error("❌ ZaloPay callback missing data or mac");
+                return false;
+            }
+
+            // 1. Verify MAC với key2
+            String reqMac = hmacSHA256(zaloPayConfig.getKey2(), data);
+            if (!reqMac.equals(mac)) {
+                log.error("❌ ZaloPay callback MAC invalid. expected={}, actual={}", reqMac, mac);
+                return false;
+            }
+
+            // 2. Parse 'data' (bên trong là JSON string)
+            Map<String, Object> callbackData = objectMapper.readValue(
+                    data, new TypeReference<Map<String, Object>>() {}
+            );
+
+            log.info("📥 ZaloPay callback data parsed: {}", objectMapper.writeValueAsString(callbackData));
+
+            String appTransId = (String) callbackData.get("app_trans_id");
+            Object amountObj = callbackData.get("amount");
+            Long amount = amountObj != null ? Long.parseLong(amountObj.toString()) : 0L;
+
+            // Lấy item -> orderId (itemid)
+            String orderId = null;
+            Object itemObj = callbackData.get("item");
+            if (itemObj != null) {
+                // Trong callback, item thường là JSON array string
+                String itemJson = itemObj.toString();
+                try {
+                    List<Map<String, Object>> items = objectMapper.readValue(
+                            itemJson, new TypeReference<List<Map<String, Object>>>() {}
+                    );
+                    if (!items.isEmpty()) {
+                        Object itemIdObj = items.get(0).get("itemid");
+                        if (itemIdObj != null) {
+                            orderId = itemIdObj.toString();
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("⚠️ Could not parse item array from callback data: {}", itemJson, e);
+                }
+            }
+
+            if (orderId == null) {
+                log.error("❌ Could not determine orderId from ZaloPay callback");
+                return false;
+            }
+
+            // 3. Cập nhật đơn hàng trong DB
+            Orders order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+            // Giả định callback này chỉ gửi khi thu tiền thành công
+            order.setStatus(2); // Đã thanh toán
+            orderRepository.save(order);
+
+            log.info("✅ ZaloPay callback processed - Order: {}, AppTransId: {}, Amount: {}",
+                    orderId, appTransId, amount);
+
+            return true;
+        } catch (Exception e) {
+            log.error("❌ Error handling ZaloPay callback", e);
+            return false;
+        }
+    }
     
     /**
      * Tạo app_trans_id: format YYMMDD_timestamp_random (tối đa 40 ký tự)
@@ -197,7 +284,35 @@ public class ZaloPayService {
         
         return appTransId;
     }
-    
+
+    /**
+     * Tạo HMAC SHA256 bất kỳ (dùng cho cả key1, key2)
+     */
+    private String hmacSHA256(String key, String data) {
+        try {
+            Mac hmacSHA256 = Mac.getInstance("HmacSHA256");
+            SecretKeySpec secretKey = new SecretKeySpec(
+                    key.getBytes(StandardCharsets.UTF_8),
+                    "HmacSHA256"
+            );
+            hmacSHA256.init(secretKey);
+            byte[] hash = hmacSHA256.doFinal(data.getBytes(StandardCharsets.UTF_8));
+
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (Exception e) {
+            log.error("Error creating HMAC SHA256", e);
+            throw new RuntimeException("Failed to create HMAC SHA256", e);
+        }
+    }
+
     /**
      * Tạo MAC (Message Authentication Code) để xác thực request
      * Theo tài liệu ZaloPay: hmac_input = app_id|app_trans_id|app_user|amount|app_time|embed_data|item

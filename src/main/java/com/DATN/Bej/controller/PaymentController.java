@@ -19,6 +19,9 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Slf4j
 @RestController
 @RequiredArgsConstructor
@@ -158,6 +161,37 @@ public class PaymentController {
         return ApiResponse.<PaymentResponse>builder()
                 .result(paymentResponse)
                 .build();
+    }
+
+    /**
+     * POST /payment/zalopay/callback
+     * Callback từ ZaloPay (server-to-server) sau khi trừ tiền user thành công
+     * ZaloPay sẽ POST JSON với các field: data, mac, type
+     *
+     * Yêu cầu response:
+     * {
+     *   "return_code": 1,           // 1 = thành công, 2 = trùng giao dịch, khác = lỗi
+     *   "return_message": "success" // mô tả
+     * }
+     *
+     * Lưu ý: Không bọc response trong ApiResponse, trả JSON raw theo format của ZaloPay.
+     */
+    @PostMapping("/zalopay/callback")
+    public Map<String, Object> zaloPayCallback(@RequestBody Map<String, Object> body) {
+        log.info("📞 ZaloPay callback received (server-to-server)");
+
+        boolean ok = zaloPayService.handleCallback(body);
+
+        Map<String, Object> resp = new HashMap<>();
+        if (ok) {
+            resp.put("return_code", 1);
+            resp.put("return_message", "success");
+        } else {
+            resp.put("return_code", -1);
+            resp.put("return_message", "error");
+        }
+
+        return resp;
     }
     
     /**
