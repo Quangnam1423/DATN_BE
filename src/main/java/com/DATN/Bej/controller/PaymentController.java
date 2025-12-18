@@ -10,6 +10,7 @@ import com.DATN.Bej.exception.AppException;
 import com.DATN.Bej.exception.ErrorCode;
 import com.DATN.Bej.repository.product.OrderRepository;
 import com.DATN.Bej.service.payment.VNPayService;
+import com.DATN.Bej.service.payment.ZaloPayService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 public class PaymentController {
     
     VNPayService vnPayService;
+    ZaloPayService zaloPayService;
     OrderRepository orderRepository;
 
     /**
@@ -110,6 +112,51 @@ public class PaymentController {
         
         return ApiResponse.<PaymentCallbackResponse>builder()
                 .result(callbackResponse)
+                .build();
+    }
+    
+    /**
+     * POST /payment/zalopay/create
+     * Tạo URL thanh toán ZaloPay cho đơn hàng
+     * 
+     * @param request CreatePaymentRequest chỉ chứa orderId
+     * @param httpRequest HttpServletRequest để lấy base URL
+     * @return PaymentResponse chứa orderUrl để redirect đến ZaloPay gateway
+     * 
+     * Example:
+     * POST /payment/zalopay/create
+     * {
+     *   "orderId": "order-123"
+     * }
+     * 
+     * Response:
+     * {
+     *   "code": 1000,
+     *   "result": {
+     *     "orderId": "order-123",
+     *     "orderUrl": "https://qcgateway.zalopay.vn/openinapp?order=...",
+     *     "paymentUrl": "https://qcgateway.zalopay.vn/openinapp?order=...",
+     *     "transactionRef": "231217_order-123",
+     *     "amount": 27990000,
+     *     "message": "Payment URL created successfully"
+     *   }
+     * }
+     */
+    @PostMapping("/zalopay/create")
+    ApiResponse<PaymentResponse> createZaloPayPayment(
+            @RequestBody @Valid CreatePaymentRequest request,
+            HttpServletRequest httpRequest) {
+        log.info("💳 Creating ZaloPay payment for order: {}", request.getOrderId());
+        
+        PaymentResponse paymentResponse = zaloPayService.createPayment(
+                request.getOrderId(),
+                httpRequest
+        );
+        
+        log.info("✅ ZaloPay payment URL created - Order: {}, Amount: {}, OrderUrl: {}", 
+                request.getOrderId(), paymentResponse.getAmount(), paymentResponse.getOrderUrl());
+        return ApiResponse.<PaymentResponse>builder()
+                .result(paymentResponse)
                 .build();
     }
     
