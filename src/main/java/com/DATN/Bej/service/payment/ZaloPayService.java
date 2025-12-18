@@ -68,7 +68,7 @@ public class ZaloPayService {
                            (request.getServerPort() != 80 && request.getServerPort() != 443 ? 
                             ":" + request.getServerPort() : "") + 
                            request.getContextPath();
-            embedData.put("redirecturl", baseUrl + "/payment/zalopay/callback");
+            embedData.put("redirecturl", baseUrl + "/payment/zalopay/return");
             
             // Tạo item (danh sách sản phẩm) - phải là array JSON string
             List<Map<String, Object>> items = new ArrayList<>();
@@ -248,6 +248,79 @@ public class ZaloPayService {
         } catch (Exception e) {
             log.error("❌ Error handling ZaloPay callback", e);
             return false;
+        }
+    }
+    
+    /**
+     * Xử lý return callback từ ZaloPay (user redirect về sau khi thanh toán, method GET)
+     * ZaloPay sẽ redirect user về URL này với query params chứa kết quả thanh toán
+     * 
+     * Query params từ ZaloPay có thể bao gồm:
+     * - appid: ID ứng dụng
+     * - apptransid: Mã giao dịch
+     * - pmcid: ID phương thức thanh toán
+     * - bankcode: Mã ngân hàng
+     * - amount: Số tiền
+     * - discountamount: Số tiền giảm giá
+     * - status: Trạng thái (1 = thành công, khác = thất bại)
+     * - checksum: Chữ ký để verify (optional)
+     * 
+     * Lưu ý: Việc cập nhật DB đã được xử lý bởi server-to-server callback (POST /payment/zalopay/callback)
+     * Method này chỉ để parse và trả về thông tin cho frontend
+     * 
+     * @param request HttpServletRequest chứa query params từ ZaloPay
+     * @return Map chứa orderId và status, hoặc null nếu không parse được
+     */
+    public Map<String, Object> handleReturnCallback(HttpServletRequest request) {
+        try {
+            log.info("📞 ZaloPay return callback received (user redirect)");
+            
+            // Lấy tất cả query params
+            Map<String, String> params = new HashMap<>();
+            for (String paramName : Collections.list(request.getParameterNames())) {
+                params.put(paramName, request.getParameter(paramName));
+            }
+            
+            log.info("📥 ZaloPay return params: {}", params);
+            
+            String appTransId = params.get("apptransid");
+            String statusStr = params.get("status");
+            String amountStr = params.get("amount");
+            
+            if (appTransId == null) {
+                log.warn("⚠️ ZaloPay return callback missing apptransid");
+                return null;
+            }
+            
+            // Tìm orderId từ appTransId (format: YYMMDD_orderId_timestamp_random)
+            // Hoặc có thể lưu mapping appTransId -> orderId trong DB/Cache
+            // Tạm thời, ta cần extract orderId từ appTransId hoặc lấy từ DB
+            // Vì appTransId format phức tạp, ta sẽ cần query DB dựa trên transaction info
+            
+            // Tuy nhiên, với flow hiện tại, server-to-server callback đã cập nhật DB
+            // Nên ở đây ta chỉ cần trả về thông tin cho frontend
+            // Frontend sẽ dùng GET /payment/status/{orderId} để check status
+            
+            int status = statusStr != null ? Integer.parseInt(statusStr) : -1;
+            Long amount = amountStr != null ? Long.parseLong(amountStr) : 0L;
+            
+            boolean success = (status == 1);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("appTransId", appTransId);
+            result.put("status", status);
+            result.put("success", success);
+            result.put("amount", amount);
+            result.put("message", success ? "Payment successful" : "Payment failed or pending");
+            
+            log.info("✅ ZaloPay return callback processed - AppTransId: {}, Status: {}, Success: {}", 
+                    appTransId, status, success);
+            
+            return result;
+            
+        } catch (Exception e) {
+            log.error("❌ Error handling ZaloPay return callback", e);
+            return null;
         }
     }
     

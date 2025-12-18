@@ -17,6 +17,8 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -192,6 +194,65 @@ public class PaymentController {
         }
 
         return resp;
+    }
+    
+    /**
+     * GET /payment/zalopay/return
+     * Return callback từ ZaloPay sau khi thanh toán (user redirect về)
+     * ZaloPay sẽ redirect user về URL này bằng GET với query params chứa kết quả
+     * 
+     * Flow:
+     * 1. User thanh toán trên ZaloPay
+     * 2. ZaloPay redirect user về đây (GET) với query params
+     * 3. Backend parse query params và trả về JSON
+     * 4. Frontend có thể dùng GET /payment/status/{orderId} để check status chi tiết
+     * 
+     * Lưu ý: 
+     * - Việc cập nhật DB đã được xử lý bởi server-to-server callback (POST /payment/zalopay/callback)
+     * - Endpoint này chỉ để frontend biết kết quả và có thể redirect về trang kết quả
+     * 
+     * @param request HttpServletRequest chứa query params từ ZaloPay
+     * @param redirectUrl URL để redirect về frontend (optional, query param: ?redirectUrl=...)
+     * @return JSON response với thông tin kết quả thanh toán
+     */
+    @GetMapping("/zalopay/return")
+    public ResponseEntity<?> zaloPayReturn(
+            HttpServletRequest request,
+            @RequestParam(required = false) String redirectUrl) {
+        log.info("📞 ZaloPay return callback received (user redirect)");
+        
+        Map<String, Object> returnData = zaloPayService.handleReturnCallback(request);
+        
+        if (returnData == null) {
+            log.warn("❌ Failed to process ZaloPay return callback");
+            Map<String, Object> errorResp = new HashMap<>();
+            errorResp.put("code", 9999);
+            errorResp.put("message", "Failed to process return callback");
+            return ResponseEntity.ok(errorResp);
+        }
+        
+        // Nếu có redirectUrl, redirect về frontend với query params
+        if (redirectUrl != null && !redirectUrl.isEmpty()) {
+            String separator = redirectUrl.contains("?") ? "&" : "?";
+            String redirectWithParams = redirectUrl + separator + 
+                "appTransId=" + returnData.get("appTransId") +
+                "&status=" + returnData.get("status") +
+                "&success=" + returnData.get("success") +
+                "&amount=" + returnData.get("amount");
+            
+            log.info("🔄 Redirecting to frontend: {}", redirectWithParams);
+            return ResponseEntity.status(HttpStatus.FOUND)
+                .header("Location", redirectWithParams)
+                .build();
+        }
+        
+        // Trả về JSON để frontend xử lý
+        Map<String, Object> response = new HashMap<>();
+        response.put("code", 1000);
+        response.put("result", returnData);
+        response.put("message", "Return callback processed. Please check payment status using GET /payment/status/{orderId}");
+        
+        return ResponseEntity.ok(response);
     }
     
     /**
