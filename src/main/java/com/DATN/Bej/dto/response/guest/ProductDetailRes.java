@@ -16,6 +16,9 @@ public class ProductDetailRes {
     String id;
     String name;
     String image;
+    String description;
+
+    int categoryId;
 
     int status;
 

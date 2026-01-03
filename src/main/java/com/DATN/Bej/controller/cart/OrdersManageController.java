@@ -1,7 +1,9 @@
 package com.DATN.Bej.controller.cart;
 
 import com.DATN.Bej.dto.request.ApiResponse;
+import com.DATN.Bej.dto.request.cartRequest.CreateOrderRequest;
 import com.DATN.Bej.dto.request.cartRequest.OrderItemsUpdateRequest;
+import com.DATN.Bej.dto.request.cartRequest.OrderRequest;
 import com.DATN.Bej.dto.request.order.UpdateOrderStatusRequest;
 import com.DATN.Bej.dto.response.OrderStatisticsResponse;
 import com.DATN.Bej.dto.response.RevenueStatisticsResponse;
@@ -13,6 +15,7 @@ import com.DATN.Bej.dto.response.cart.OrdersResponse;
 import com.DATN.Bej.dto.response.order.OrderStatusUpdateResponse;
 import com.DATN.Bej.service.guest.CartService;
 import com.DATN.Bej.service.order.OrderService;
+import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +40,16 @@ public class OrdersManageController {
     CartService cartService;
     OrderService orderService;
 
+
+    @PostMapping("/create")
+    @PreAuthorize("hasRole('ADMIN')")
+    ApiResponse<OrderDetailsResponse> createNewOrder(@RequestBody @Valid CreateOrderRequest request){
+        OrderDetailsResponse result = orderService.createNewOrder(request);
+        log.info("✅ Order created successfully - Order ID: {}", result.getId());
+        return ApiResponse.<OrderDetailsResponse>builder()
+                .result(result)
+                .build();
+    }
     /**
      * GET /manage/orders/get-all
      * Lấy danh sách tất cả đơn hàng (Admin only)
@@ -48,6 +61,14 @@ public class OrdersManageController {
         log.info("📦 Admin getting all orders");
         return ApiResponse.<List<OrdersResponse>>builder()
                 .result(cartService.getAllOrders())
+                .build();
+    }
+
+    @GetMapping("/get-by-type")
+    @PreAuthorize("hasRole('ADMIN')")
+    ApiResponse<List<OrdersResponse>> getOrdersByType(@RequestParam int type){
+        return ApiResponse.<List<OrdersResponse>>builder()
+                .result(cartService.getOrdersByType(type))
                 .build();
     }
 
@@ -265,4 +286,5 @@ public class OrdersManageController {
                 .result(result)
                 .build();
     }
+
 }

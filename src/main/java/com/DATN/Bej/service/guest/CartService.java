@@ -249,6 +249,10 @@ public class CartService {
         return ordersRepository.findAllByOrderByOrderAtDesc().stream().map(orderMapper::toOrdersResponse).toList();
     }
 
+    public List<OrdersResponse> getOrdersByType(int type){
+        return ordersRepository.findDistinctByTypeOrderByOrderAtDesc(type).stream().map(orderMapper::toOrdersResponse).toList();
+    }
+
     public OrderDetailsResponse getOrderDetails(String orderId){
         return ordersRepository.findById(orderId).map(orderMapper::toOrderDetailsResponse)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));

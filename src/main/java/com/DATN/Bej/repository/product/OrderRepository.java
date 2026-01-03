@@ -14,7 +14,7 @@ public interface OrderRepository extends JpaRepository<Orders, String> {
 
     List<Orders> findAllByUserId(String userId);
     List<Orders> findAllByOrderByOrderAtDesc();
-    
+    List<Orders> findDistinctByTypeOrderByOrderAtDesc(int type);
     /**
      * Lấy tất cả orders trong một tháng cụ thể
      * @param startDate Ngày bắt đầu tháng
@@ -42,7 +42,13 @@ public interface OrderRepository extends JpaRepository<Orders, String> {
      */
     @Query("SELECT COUNT(o) FROM Orders o WHERE o.orderAt BETWEEN :startDate AND :endDate AND o.status IN (2, 5)")
     Long countByOrderAtBetweenAndStatus(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
-    
+
+    @Query("SELECT COUNT(o) FROM Orders o WHERE o.orderAt BETWEEN :startDate AND :endDate")
+    Long countByOrderAtBetween(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+    @Query("SELECT COUNT(o) FROM Orders o WHERE o.orderAt BETWEEN :startDate AND :endDate AND o.type = :type")
+    Long countByOrderAtBetweenAndType(@Param("startDate") LocalDate startDate,
+                                      @Param("endDate") LocalDate endDate,
+                                      @Param("type") int type);
     /**
      * Tính tổng doanh thu trong khoảng thời gian theo type
      */

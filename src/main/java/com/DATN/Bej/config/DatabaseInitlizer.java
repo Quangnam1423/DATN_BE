@@ -68,14 +68,6 @@ public class DatabaseInitlizer implements CommandLineRunner{
         // Danh sách categories cần có
         String[][] categories = {
             {"Điện thoại", "DT"},
-            {"Laptop", "LT"},
-            {"Tablet", "TB"},
-            {"Màn hình", "MH"},
-            {"Linh kiện máy tính", "LK"},
-            {"Điện máy", "DM"},
-            {"Đồng hồ", "DH"},
-            {"Âm thanh", "AT"},
-            {"Smart home", "SH"},
             {"Phụ kiện", "PK"},
             {"Sửa chữa", "SC"}
         };

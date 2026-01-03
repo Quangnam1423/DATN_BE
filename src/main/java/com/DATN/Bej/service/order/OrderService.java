@@ -1,5 +1,6 @@
 package com.DATN.Bej.service.order;
 
+import com.DATN.Bej.dto.request.cartRequest.CreateOrderRequest;
 import com.DATN.Bej.dto.request.cartRequest.OrderItemsUpdateRequest;
 import com.DATN.Bej.dto.request.order.UpdateOrderStatusRequest;
 import com.DATN.Bej.dto.response.OrderStatisticsResponse;
@@ -19,6 +20,7 @@ import com.DATN.Bej.exception.AppException;
 import com.DATN.Bej.exception.ErrorCode;
 import com.DATN.Bej.mapper.product.OrderMapper;
 import com.DATN.Bej.repository.UserRepository;
+import com.DATN.Bej.repository.product.CartItemRepository;
 import com.DATN.Bej.repository.product.OrderItemRepository;
 import com.DATN.Bej.repository.product.OrderRepository;
 import com.DATN.Bej.repository.product.ProductAttributeRepository;
@@ -50,6 +52,7 @@ import java.util.Map;
 public class OrderService {
     private final ProductAttributeRepository productAttributeRepository;
     private final UserRepository userRepository;
+    CartItemRepository cartItemRepository;
 
     OrderMapper orderMapper;
 
@@ -221,7 +224,9 @@ public class OrderService {
         LocalDate endDate = yearMonth.atEndOfMonth();
         
         Double totalRevenue = orderRepository.sumTotalPriceByOrderAtBetweenAndStatus(startDate, endDate);
-        Long totalOrders = orderRepository.countByOrderAtBetweenAndStatus(startDate, endDate);
+        Long totalOrders = orderRepository.countByOrderAtBetween(startDate, endDate);
+        Long repairOrder = orderRepository.countByOrderAtBetweenAndType(startDate, endDate, 1);
+        Long saleOrder = orderRepository.countByOrderAtBetweenAndType(startDate, endDate, 0);
         
         if (totalRevenue == null) {
             totalRevenue = 0.0;
@@ -232,6 +237,8 @@ public class OrderService {
                 .month(month)
                 .totalRevenue(totalRevenue)
                 .totalOrders(totalOrders != null ? totalOrders : 0)
+                .repairOrder(repairOrder)
+                .saleOrder(saleOrder)
                 .monthlyRevenues(null)
                 .build();
     }
@@ -535,6 +542,42 @@ public class OrderService {
                 .services(services)
                 .limit(limit)
                 .build();
+    }
+
+
+    public OrderDetailsResponse createNewOrder(CreateOrderRequest request) {
+        User user = userRepository.findById(request.getUserId()).orElseThrow(
+                () -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        Orders orders = orderMapper.toOrder(request);
+        orders.setUser(user);
+
+        List<OrderItem> orderItems = new ArrayList<>();
+        for (var itemReq : request.getItems()) {
+            log.info(itemReq.getCartItemId());
+            ProductAttribute productAtt = productAttributeRepository
+                    .findById(itemReq.getProductAttId())
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+            OrderItem orderItem = orderMapper.toOrderItem(itemReq);
+            orderItem.setProductA(productAtt);
+            orderItem.setOrder(orders);
+            orderItem.setPrice(productAtt.getFinalPrice());
+//            cartItemRepository.deleteById(itemReq.getCartItemId());
+
+//            productAttributeRepository.increaseSoldQuantity(UUID.fromString(productAtt.getId()), orderItem.getQuantity());
+
+            orderItems.add(orderItem);
+        }
+        double totalPrice = orderItems.stream()
+                .mapToDouble(OrderItem::getPrice)
+                .sum();
+
+        orders.setTotalPrice(totalPrice);
+        orders.setOrderItems(orderItems);
+        orders.setOrderAt(LocalDate.now());
+
+        Orders saved = orderRepository.save(orders);
+        return orderMapper.toOrderDetailsResponse(saved);
     }
 }
 
