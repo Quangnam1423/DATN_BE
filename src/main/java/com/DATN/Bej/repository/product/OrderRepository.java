@@ -15,6 +15,15 @@ public interface OrderRepository extends JpaRepository<Orders, String> {
     List<Orders> findAllByUserId(String userId);
     List<Orders> findAllByOrderByOrderAtDesc();
     List<Orders> findDistinctByTypeOrderByOrderAtDesc(int type);
+
+    @Query("""
+        SELECT p FROM Orders p
+        WHERE LOWER(p.phoneNumber) LIKE LOWER(CONCAT('%', :phoneNumber, '%'))
+        ORDER BY p.orderAt DESC""")
+    List<Orders> searchByPhoneNumberOrderByOrderAtDesc(
+            @Param("phoneNumber") String phoneNumber
+    );
+
     /**
      * Lấy tất cả orders trong một tháng cụ thể
      * @param startDate Ngày bắt đầu tháng

@@ -19,5 +19,11 @@ public class ProductListResponse {
     int status;
     LocalDate createDate;
 
+    double originalPrice;
+    double finalPrice;
+
+    int soldQuantity;
+    int stockQuantity;
+
     VariantSummaryResponse variant;
 }

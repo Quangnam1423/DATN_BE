@@ -72,6 +72,14 @@ public class OrdersManageController {
                 .build();
     }
 
+    @GetMapping("/search")
+    @PreAuthorize("hasRole('ADMIN')")
+    ApiResponse<List<OrdersResponse>> getOrdersByPhoneOrName(@RequestParam(required = false) String phoneNumber){
+        return ApiResponse.<List<OrdersResponse>>builder()
+                .result(cartService.getOrdersByPhoneOrName(phoneNumber))
+                .build();
+    }
+
     /**
      * GET /manage/orders/details/{orderId}
      * Lấy chi tiết đơn hàng (Admin only)

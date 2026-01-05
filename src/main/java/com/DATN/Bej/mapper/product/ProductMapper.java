@@ -28,7 +28,30 @@ public interface ProductMapper {
     List<ProductResponse> toResponseList(List<Product> products);
 
 
-    @Mapping(target = "variant", expression = "java(firstVariantSummary(product.getVariants()))")
+    @Mapping(
+            target = "soldQuantity",
+            expression = "java(product.getVariants().stream()" +
+                    ".flatMap(v -> v.getAttributes().stream())" +
+                    ".mapToInt(a -> a.getSoldQuantity()).sum())"
+    )
+    @Mapping(
+            target = "stockQuantity",
+            expression = "java(product.getVariants().stream()" +
+                    ".flatMap(v -> v.getAttributes().stream())" +
+                    ".mapToInt(a -> a.getStockQuantity()).sum())"
+    )
+    @Mapping(
+            target = "originalPrice",
+            expression = "java(product.getVariants().stream()" +
+                    ".flatMap(v -> v.getAttributes().stream())" +
+                    ".mapToDouble(a -> a.getOriginalPrice()).min().orElse(0))"
+    )
+    @Mapping(
+            target = "finalPrice",
+            expression = "java(product.getVariants().stream()" +
+                    ".flatMap(v -> v.getAttributes().stream())" +
+                    ".mapToDouble(a -> a.getFinalPrice()).min().orElse(0))"
+    )
     ProductListResponse toProductListResponse(Product product);
     List<ProductListResponse> toListProduct(List<Product> products);
 

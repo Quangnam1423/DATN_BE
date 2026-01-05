@@ -14,6 +14,7 @@ public class OrdersResponse {
 
     String userName;
     String address;
+    String phoneNumber;
 
     int status;
     int type;
