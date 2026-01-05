@@ -45,10 +45,6 @@ public class VNPayService {
         vnp_Params.put("vnp_Locale", "vn");
 
         vnp_Params.put("vnp_ReturnUrl", vnPayConfig.getReturnUrl());
-        // Thêm IPN URL cho server-to-server callback (nếu có)
-        if (vnPayConfig.getIpnUrl() != null && !vnPayConfig.getIpnUrl().isEmpty()) {
-            vnp_Params.put("vnp_IpnUrl", vnPayConfig.getIpnUrl());
-        }
         vnp_Params.put("vnp_IpAddr", vnp_IpAddr);
 
         Calendar cld = Calendar.getInstance(TimeZone.getTimeZone("Etc/GMT+7"));
@@ -87,30 +83,22 @@ public class VNPayService {
     }
 
     /**
-     * Tạo payment URL và QR code cho đơn hàng (chỉ cần orderId)
-     * Backend tự động lấy totalPrice từ Orders
+     * Tạo payment URL và QR code cho đơn hàng
      * @param orderId ID đơn hàng
+     * @param amount Số tiền thanh toán (VND)
+     * @param orderInfo Thông tin đơn hàng (optional)
      * @param request HttpServletRequest
      * @return PaymentResponse chứa paymentUrl, qrCodeUrl, transactionRef
      */
-    public PaymentResponse createPayment(String orderId, HttpServletRequest request) {
+    public PaymentResponse createPayment(String orderId, Long amount, String orderInfo, HttpServletRequest request) {
         // Kiểm tra đơn hàng tồn tại
         Orders order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
         
-        // Kiểm tra đơn hàng chưa được thanh toán
-        if (order.getStatus() == 2 || order.getStatus() == 5) {
-            throw new AppException(ErrorCode.INVALID_KEY); // Đơn đã thanh toán rồi
+        // Nếu không có orderInfo, tạo từ orderId
+        if (orderInfo == null || orderInfo.isEmpty()) {
+            orderInfo = "Thanh toan don hang " + orderId;
         }
-        
-        // Lấy totalPrice từ Orders
-        Long amount = (long) order.getTotalPrice();
-        if (amount <= 0) {
-            throw new AppException(ErrorCode.INVALID_KEY); // Số tiền không hợp lệ
-        }
-        
-        // Tạo orderInfo từ orderId
-        String orderInfo = "Thanh toan don hang " + orderId;
         
         // Tạo payment URL
         String baseUrl = request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort();
@@ -135,20 +123,6 @@ public class VNPayService {
                 .amount(amount)
                 .message("Payment URL created successfully")
                 .build();
-    }
-    
-    /**
-     * Tạo payment URL và QR code cho đơn hàng (backward compatibility)
-     * @param orderId ID đơn hàng
-     * @param amount Số tiền thanh toán (VND) - sẽ bị ignore, lấy từ Orders
-     * @param orderInfo Thông tin đơn hàng (optional) - sẽ bị ignore
-     * @param request HttpServletRequest
-     * @return PaymentResponse chứa paymentUrl, qrCodeUrl, transactionRef
-     * @deprecated Sử dụng createPayment(String orderId, HttpServletRequest request) thay thế
-     */
-    @Deprecated
-    public PaymentResponse createPayment(String orderId, Long amount, String orderInfo, HttpServletRequest request) {
-        return createPayment(orderId, request);
     }
     
     /**
@@ -303,77 +277,5 @@ public class VNPayService {
         
         // Option 2: Trả về paymentUrl để client tự generate QR code
         return paymentUrl;
-    }
-    
-    /**
-     * Xử lý IPN (Instant Payment Notification) từ VNPay
-     * IPN là callback server-to-server, được gọi tự động bởi VNPay
-     * @param request HttpServletRequest chứa thông tin từ VNPay
-     * @return PaymentCallbackResponse với kết quả thanh toán
-     */
-    @Transactional
-    public PaymentCallbackResponse handleIPNCallback(HttpServletRequest request) {
-        log.info("📞 Processing IPN callback from VNPay");
-        
-        // Validate signature
-        int paymentStatus = orderReturn(request);
-        
-        String orderInfo = request.getParameter("vnp_OrderInfo");
-        String transactionRef = request.getParameter("vnp_TxnRef");
-        String transactionId = request.getParameter("vnp_TransactionNo");
-        String paymentTime = request.getParameter("vnp_PayDate");
-        String amountStr = request.getParameter("vnp_Amount");
-        
-        // Extract orderId từ orderInfo
-        String orderId = extractOrderIdFromOrderInfo(orderInfo);
-        
-        Long amount = amountStr != null ? Long.parseLong(amountStr) / 100 : 0L;
-        
-        // Cập nhật trạng thái đơn hàng
-        Orders order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-        
-        boolean success = (paymentStatus == 1);
-        String message;
-        
-        if (success) {
-            // Thanh toán thành công: status = 2 (đã thanh toán)
-            order.setStatus(2);
-            message = "Payment successful";
-            log.info("✅ IPN: Payment successful - Order: {}, Transaction: {}", orderId, transactionId);
-        } else if (paymentStatus == 0) {
-            // Thanh toán thất bại: status = 3 (thanh toán thất bại)
-            order.setStatus(3);
-            message = "Payment failed";
-            log.warn("❌ IPN: Payment failed - Order: {}", orderId);
-        } else {
-            // Lỗi signature: không cập nhật status
-            message = "Invalid payment signature";
-            log.error("❌ IPN: Invalid payment signature - Order: {}", orderId);
-            // Không cập nhật order nếu signature không hợp lệ
-            return PaymentCallbackResponse.builder()
-                    .orderId(orderId)
-                    .transactionRef(transactionRef)
-                    .transactionId(transactionId)
-                    .paymentTime(paymentTime)
-                    .amount(amount)
-                    .paymentStatus(paymentStatus)
-                    .message(message)
-                    .success(false)
-                    .build();
-        }
-        
-        orderRepository.save(order);
-        
-        return PaymentCallbackResponse.builder()
-                .orderId(orderId)
-                .transactionRef(transactionRef)
-                .transactionId(transactionId)
-                .paymentTime(paymentTime)
-                .amount(amount)
-                .paymentStatus(paymentStatus)
-                .message(message)
-                .success(success)
-                .build();
     }
 }

@@ -1,14 +1,9 @@
 package com.DATN.Bej.controller;
 
 import com.DATN.Bej.dto.request.ApiResponse;
-import com.DATN.Bej.dto.request.payment.CreatePaymentRequest;
+import com.DATN.Bej.dto.request.payment.PaymentRequest;
 import com.DATN.Bej.dto.response.payment.PaymentCallbackResponse;
 import com.DATN.Bej.dto.response.payment.PaymentResponse;
-import com.DATN.Bej.dto.response.payment.PaymentStatusResponse;
-import com.DATN.Bej.entity.cart.Orders;
-import com.DATN.Bej.exception.AppException;
-import com.DATN.Bej.exception.ErrorCode;
-import com.DATN.Bej.repository.product.OrderRepository;
 import com.DATN.Bej.service.payment.VNPayService;
 import com.DATN.Bej.service.payment.ZaloPayService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,80 +33,69 @@ public class PaymentController {
     /**
      * POST /payment/create
      * Tạo URL thanh toán VNPay cho đơn hàng
-     * Backend tự động lấy totalPrice từ Orders, không cần client gửi amount
      * 
-     * @param request CreatePaymentRequest chỉ chứa orderId
+     * @param request PaymentRequest chứa orderId, amount, orderInfo
      * @param httpRequest HttpServletRequest để lấy IP và base URL
-     * @return PaymentResponse chứa paymentUrl, qrCodeUrl, transactionRef, amount
+     * @return PaymentResponse chứa paymentUrl, qrCodeUrl, transactionRef
      * 
      * Response sẽ chứa:
      * - paymentUrl: URL để redirect đến trang thanh toán VNPay
-     * - qrCodeUrl: URL QR code (có thể dùng để generate QR code ở client)
+     * - qrCodeUrl: URL QR code (nếu VNPay hỗ trợ)
      * - transactionRef: Mã tham chiếu giao dịch
-     * - amount: Số tiền thanh toán (tự động lấy từ Orders.totalPrice)
      * 
      * Example:
      * POST /payment/create
      * {
-     *   "orderId": "order-123"
-     * }
-     * 
-     * Response:
-     * {
-     *   "code": 1000,
-     *   "result": {
-     *     "orderId": "order-123",
-     *     "paymentUrl": "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?...",
-     *     "qrCodeUrl": "...",
-     *     "transactionRef": "12345678",
-     *     "amount": 27990000,
-     *     "message": "Payment URL created successfully"
-     *   }
+     *   "orderId": "order-123",
+     *   "amount": 27990000,
+     *   "orderInfo": "Thanh toan don hang order-123"
      * }
      */
     @PostMapping("/create")
     ApiResponse<PaymentResponse> createPayment(
-            @RequestBody @Valid CreatePaymentRequest request,
+            @RequestBody @Valid PaymentRequest request,
             HttpServletRequest httpRequest) {
-        log.info("💳 Creating payment for order: {}", request.getOrderId());
+        log.info("💳 Creating payment for order: {}, amount: {}", request.getOrderId(), request.getAmount());
         
         PaymentResponse paymentResponse = vnPayService.createPayment(
                 request.getOrderId(),
+                request.getAmount(),
+                request.getOrderInfo(),
                 httpRequest
         );
         
-        log.info("✅ Payment URL created - Order: {}, Amount: {}, TransactionRef: {}", 
-                request.getOrderId(), paymentResponse.getAmount(), paymentResponse.getTransactionRef());
+        log.info("✅ Payment URL created - TransactionRef: {}", paymentResponse.getTransactionRef());
         return ApiResponse.<PaymentResponse>builder()
                 .result(paymentResponse)
                 .build();
     }
     
     /**
-     * POST /payment/ipn
-     * IPN (Instant Payment Notification) callback từ VNPay (server-to-server)
-     * VNPay sẽ gọi endpoint này tự động để cập nhật trạng thái thanh toán
+     * GET /payment/callback
+     * Callback từ VNPay sau khi thanh toán
+     * Cập nhật trạng thái đơn hàng dựa trên kết quả thanh toán
      * 
      * @param request HttpServletRequest chứa các tham số từ VNPay
      * @return PaymentCallbackResponse với thông tin kết quả thanh toán
      * 
-     * VNPay sẽ POST đến URL này với các tham số tương tự như /callback
-     * IPN được gọi tự động bởi VNPay server, không phải user redirect
-     * 
-     * Note: Cần cấu hình IPN URL trong VNPay merchant admin:
-     * https://sandbox.vnpayment.vn/merchantv2/
+     * VNPay sẽ redirect về URL này với các tham số:
+     * - vnp_TransactionStatus: "00" = thành công
+     * - vnp_OrderInfo: orderId
+     * - vnp_TransactionNo: mã giao dịch
+     * - vnp_PayDate: thời gian thanh toán
+     * - vnp_Amount: số tiền
      */
-    @PostMapping("/ipn")
-    ApiResponse<PaymentCallbackResponse> paymentIPN(HttpServletRequest request) {
-        log.info("📞 IPN callback received from VNPay (server-to-server)");
+    @GetMapping("/callback")
+    ApiResponse<PaymentCallbackResponse> paymentCallback(HttpServletRequest request) {
+        log.info("📞 Payment callback received from VNPay");
         
-        PaymentCallbackResponse callbackResponse = vnPayService.handleIPNCallback(request);
+        PaymentCallbackResponse callbackResponse = vnPayService.handlePaymentCallback(request);
         
         if (callbackResponse.isSuccess()) {
-            log.info("✅ IPN: Payment successful - Order: {}, Transaction: {}", 
+            log.info("✅ Payment successful - Order: {}, Transaction: {}", 
                     callbackResponse.getOrderId(), callbackResponse.getTransactionId());
         } else {
-            log.warn("❌ IPN: Payment failed - Order: {}, Status: {}", 
+            log.warn("❌ Payment failed - Order: {}, Status: {}", 
                     callbackResponse.getOrderId(), callbackResponse.getPaymentStatus());
         }
         

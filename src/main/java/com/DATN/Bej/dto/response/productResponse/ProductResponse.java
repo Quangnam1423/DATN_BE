@@ -16,6 +16,8 @@ public class ProductResponse {
     String name;
     String image;
 
+    String description;
+
     int status;
     LocalDate createDate;
 
