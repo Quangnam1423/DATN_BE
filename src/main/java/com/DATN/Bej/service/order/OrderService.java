@@ -129,6 +129,7 @@ public class OrderService {
         OrderStatusUpdateEvent statusUpdateEvent = new OrderStatusUpdateEvent(
                 orderId,
                 userId,
+                order.getType(),  // 0 = đơn mua bán, 1 = đơn sửa chữa
                 oldStatus,
                 newStatus,
                 getStatusName(newStatus),
