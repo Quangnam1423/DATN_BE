@@ -216,8 +216,11 @@ public class CartService {
         orders.setOrderAt(LocalDate.now());
 
         Orders saved = ordersRepository.save(orders);
+        log.info("✅ Order saved to database - Order ID: {}, Type: {}, User: {}, TotalPrice: {}", 
+                saved.getId(), saved.getType(), user.getId(), saved.getTotalPrice());
         
         // Publish event để tạo thông báo cho admin và user
+        // Event sẽ được xử lý sau khi transaction commit nhờ @TransactionalEventListener(phase = AFTER_COMMIT)
         OrderCreatedEvent orderCreatedEvent = new OrderCreatedEvent(
                 saved.getId(),
                 user.getId(),
@@ -225,8 +228,10 @@ public class CartService {
                 saved.getTotalPrice(),
                 saved.getDescription()
         );
+        log.info("📤 Publishing OrderCreatedEvent - Order: {}, Type: {}, User: {}, TotalPrice: {}", 
+                saved.getId(), saved.getType(), user.getId(), saved.getTotalPrice());
         eventPublisher.publishEvent(orderCreatedEvent);
-        log.info("✅ Order created event published - Order: {}, Type: {}, User: {}", 
+        log.info("✅ Order created event published successfully - Order: {}, Type: {}, User: {}", 
                 saved.getId(), saved.getType(), user.getId());
         
         return orderMapper.toOrderDetailsResponse(saved);

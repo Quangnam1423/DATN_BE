@@ -6,6 +6,7 @@ package com.DATN.Bej.event;
 public record OrderStatusUpdateEvent(
     String orderId,           // ID đơn hàng
     String userId,            // ID user sở hữu đơn hàng
+    Integer orderType,        // Loại đơn hàng: 0 = đơn mua bán, 1 = đơn sửa chữa
     Integer oldStatus,        // Trạng thái cũ
     Integer newStatus,        // Trạng thái mới
     String statusName,        // Tên trạng thái

@@ -15,6 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.List;
 import java.util.Map;
@@ -55,11 +57,13 @@ public class NotificationEventListener {
      * Tự động gửi thông báo cho:
      * 1. User tạo đơn hàng (xác nhận đơn đã được tạo)
      * 2. Tất cả admin users (thông báo có đơn hàng mới)
+     * 
+     * Sử dụng @TransactionalEventListener để đảm bảo chỉ chạy sau khi transaction commit thành công
      */
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleOrderCreatedEvent(OrderCreatedEvent event) {
-        log.info("📦 Handling OrderCreatedEvent - Order: {}, User: {}, Type: {}", 
+        log.info("📦 [EVENT LISTENER] Handling OrderCreatedEvent - Order: {}, User: {}, Type: {}", 
                 event.orderId(), event.userId(), event.orderType());
         
         try {
@@ -80,11 +84,12 @@ public class NotificationEventListener {
                        "totalPrice", String.valueOf(event.totalPrice()))
             );
             
+            log.info("📨 [EVENT LISTENER] Sending notification to user: {}", event.userId());
             notificationService.createAndSendPersonalNotification(
                 event.userId(),
                 userNotification
             );
-            log.info("✅ Order created notification sent to user: {}", event.userId());
+            log.info("✅ [EVENT LISTENER] Order created notification sent to user: {}", event.userId());
             
             // 2. Gửi thông báo cho tất cả admin users
             String adminTitle = event.orderType() == 0 ? "Đơn hàng mới" : "Yêu cầu sửa chữa mới";
@@ -103,63 +108,82 @@ public class NotificationEventListener {
             );
             
             // Lấy tất cả admin users và gửi thông báo
+            log.info("📨 [EVENT LISTENER] Finding admin users...");
             List<User> adminUsers = userRepository.findAll().stream()
                     .filter(user -> user.getRoles() != null && user.getRoles().contains(Role.ADMIN))
                     .toList();
             
+            log.info("📨 [EVENT LISTENER] Found {} admin users, sending notifications...", adminUsers.size());
             for (User admin : adminUsers) {
-                notificationService.createAndSendPersonalNotification(
-                    admin.getId(),
-                    adminNotification
-                );
+                try {
+                    log.info("📨 [EVENT LISTENER] Sending notification to admin: {} ({})", admin.getId(), admin.getFullName());
+                    notificationService.createAndSendPersonalNotification(
+                        admin.getId(),
+                        adminNotification
+                    );
+                    log.info("✅ [EVENT LISTENER] Notification sent to admin: {}", admin.getId());
+                } catch (Exception e) {
+                    log.error("❌ [EVENT LISTENER] Failed to send notification to admin {}: {}", admin.getId(), e.getMessage(), e);
+                }
             }
             
-            log.info("✅ Order created notifications sent to {} admin users", adminUsers.size());
+            log.info("✅ [EVENT LISTENER] Order created notifications sent to {} admin users", adminUsers.size());
         } catch (Exception e) {
-            log.error("❌ Failed to send order created notification - Order: {}, User: {} - {}", 
+            log.error("❌ [EVENT LISTENER] Failed to send order created notification - Order: {}, User: {} - {}", 
                     event.orderId(), event.userId(), e.getMessage(), e);
+            log.error("❌ [EVENT LISTENER] Exception stack trace:", e);
         }
     }
     
     /**
      * Xử lý sự kiện cập nhật trạng thái đơn hàng
      * Tự động gửi thông báo cho user sở hữu đơn hàng
+     * Phân biệt đơn mua bán (type=0) và đơn sửa chữa (type=1)
      */
     @Async
     @EventListener
     public void handleOrderStatusUpdateEvent(OrderStatusUpdateEvent event) {
-        log.info("📦 Handling OrderStatusUpdateEvent - Order: {}, User: {}, Status: {} -> {}", 
-                event.orderId(), event.userId(), event.oldStatus(), event.newStatus());
+        log.info("📦 [EVENT LISTENER] Handling OrderStatusUpdateEvent - Order: {}, User: {}, Type: {}, Status: {} -> {}", 
+                event.orderId(), event.userId(), event.orderType(), event.oldStatus(), event.newStatus());
         
         try {
+            // Xác định notification type dựa trên orderType
+            NotificationType notificationType = event.orderType() == 0 
+                ? NotificationType.ORDER_STATUS_UPDATE  // Đơn mua bán
+                : NotificationType.REPAIR_STATUS_UPDATE;  // Đơn sửa chữa
+            
             // Tạo thông báo từ event
-            String title = "Cập nhật đơn hàng";
-            String body = String.format("Đơn hàng #%s đã được cập nhật: %s", 
-                    event.orderId(), event.statusName());
+            String title = event.orderType() == 0 ? "Cập nhật đơn hàng" : "Cập nhật trạng thái sửa chữa";
+            String body = event.orderType() == 0
+                ? String.format("Đơn hàng #%s đã được cập nhật: %s", event.orderId(), event.statusName())
+                : String.format("Yêu cầu sửa chữa #%s đã được cập nhật: %s", event.orderId(), event.statusName());
             
             if (event.note() != null && !event.note().isEmpty()) {
                 body += " - " + event.note();
             }
             
             ApiNotificationRequest notificationRequest = new ApiNotificationRequest(
-                NotificationType.ORDER_STATUS_UPDATE,
+                notificationType,
                 title,
                 body,
                 Map.of("orderId", event.orderId(), 
+                       "orderType", String.valueOf(event.orderType()),
                        "oldStatus", String.valueOf(event.oldStatus()),
                        "newStatus", String.valueOf(event.newStatus()))
             );
             
+            log.info("📨 [EVENT LISTENER] Sending {} notification to user: {}", notificationType, event.userId());
             // Gửi thông báo cho user
             notificationService.createAndSendPersonalNotification(
                 event.userId(),
                 notificationRequest
             );
             
-            log.info("✅ Order status update notification sent to user: {}", event.userId());
+            log.info("✅ [EVENT LISTENER] Order status update notification sent to user: {}", event.userId());
         } catch (Exception e) {
-            log.error("❌ Failed to send order status update notification - Order: {}, User: {} - {}", 
+            log.error("❌ [EVENT LISTENER] Failed to send order status update notification - Order: {}, User: {} - {}", 
                     event.orderId(), event.userId(), e.getMessage(), e);
+            log.error("❌ [EVENT LISTENER] Exception stack trace:", e);
         }
     }
 
