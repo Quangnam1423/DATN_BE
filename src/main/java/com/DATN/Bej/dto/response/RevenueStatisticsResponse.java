@@ -19,6 +19,9 @@ public class RevenueStatisticsResponse {
     double totalRevenue;
     
     long totalOrders;
+
+    long repairOrder;
+    long saleOrder;
     
     List<MonthlyRevenue> monthlyRevenues;
     

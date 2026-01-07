@@ -10,13 +10,19 @@ import com.DATN.Bej.exception.AppException;
 import com.DATN.Bej.exception.ErrorCode;
 import com.DATN.Bej.repository.product.OrderRepository;
 import com.DATN.Bej.service.payment.VNPayService;
+import com.DATN.Bej.service.payment.ZaloPayService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -26,6 +32,7 @@ import org.springframework.web.bind.annotation.*;
 public class PaymentController {
     
     VNPayService vnPayService;
+    ZaloPayService zaloPayService;
     OrderRepository orderRepository;
 
     /**
@@ -62,23 +69,23 @@ public class PaymentController {
      *   }
      * }
      */
-    @PostMapping("/create")
-    ApiResponse<PaymentResponse> createPayment(
-            @RequestBody @Valid CreatePaymentRequest request,
-            HttpServletRequest httpRequest) {
-        log.info("💳 Creating payment for order: {}", request.getOrderId());
+    // @PostMapping("/create")
+    // ApiResponse<PaymentResponse> createPayment(
+    //         @RequestBody @Valid CreatePaymentRequest request,
+    //         HttpServletRequest httpRequest) {
+    //     log.info("💳 Creating payment for order: {}", request.getOrderId());
         
-        PaymentResponse paymentResponse = vnPayService.createPayment(
-                request.getOrderId(),
-                httpRequest
-        );
+    //     PaymentResponse paymentResponse = vnPayService.createPayment(
+    //             request.getOrderId(),
+    //             httpRequest
+    //     );
         
-        log.info("✅ Payment URL created - Order: {}, Amount: {}, TransactionRef: {}", 
-                request.getOrderId(), paymentResponse.getAmount(), paymentResponse.getTransactionRef());
-        return ApiResponse.<PaymentResponse>builder()
-                .result(paymentResponse)
-                .build();
-    }
+    //     log.info("✅ Payment URL created - Order: {}, Amount: {}, TransactionRef: {}", 
+    //             request.getOrderId(), paymentResponse.getAmount(), paymentResponse.getTransactionRef());
+    //     return ApiResponse.<PaymentResponse>builder()
+    //             .result(paymentResponse)
+    //             .build();
+    // }
     
     /**
      * POST /payment/ipn
@@ -94,23 +101,158 @@ public class PaymentController {
      * Note: Cần cấu hình IPN URL trong VNPay merchant admin:
      * https://sandbox.vnpayment.vn/merchantv2/
      */
-    @PostMapping("/ipn")
-    ApiResponse<PaymentCallbackResponse> paymentIPN(HttpServletRequest request) {
-        log.info("📞 IPN callback received from VNPay (server-to-server)");
+    // @PostMapping("/ipn")
+    // ApiResponse<PaymentCallbackResponse> paymentIPN(HttpServletRequest request) {
+    //     log.info("📞 IPN callback received from VNPay (server-to-server)");
         
-        PaymentCallbackResponse callbackResponse = vnPayService.handleIPNCallback(request);
+    //     PaymentCallbackResponse callbackResponse = vnPayService.handleIPNCallback(request);
         
-        if (callbackResponse.isSuccess()) {
-            log.info("✅ IPN: Payment successful - Order: {}, Transaction: {}", 
-                    callbackResponse.getOrderId(), callbackResponse.getTransactionId());
+    //     if (callbackResponse.isSuccess()) {
+    //         log.info("✅ IPN: Payment successful - Order: {}, Transaction: {}", 
+    //                 callbackResponse.getOrderId(), callbackResponse.getTransactionId());
+    //     } else {
+    //         log.warn("❌ IPN: Payment failed - Order: {}, Status: {}", 
+    //                 callbackResponse.getOrderId(), callbackResponse.getPaymentStatus());
+    //     }
+        
+    //     return ApiResponse.<PaymentCallbackResponse>builder()
+    //             .result(callbackResponse)
+    //             .build();
+    // }
+    
+    /**
+     * POST /payment/zalopay/create
+     * Tạo URL thanh toán ZaloPay cho đơn hàng
+     * 
+     * @param request CreatePaymentRequest chỉ chứa orderId
+     * @param httpRequest HttpServletRequest để lấy base URL
+     * @return PaymentResponse chứa orderUrl để redirect đến ZaloPay gateway
+     * 
+     * Example:
+     * POST /payment/zalopay/create
+     * {
+     *   "orderId": "order-123"
+     * }
+     * 
+     * Response:
+     * {
+     *   "code": 1000,
+     *   "result": {
+     *     "orderId": "order-123",
+     *     "orderUrl": "https://qcgateway.zalopay.vn/openinapp?order=...",
+     *     "paymentUrl": "https://qcgateway.zalopay.vn/openinapp?order=...",
+     *     "transactionRef": "231217_order-123",
+     *     "amount": 27990000,
+     *     "message": "Payment URL created successfully"
+     *   }
+     * }
+     */
+    @PostMapping("/zalopay/create")
+    ApiResponse<PaymentResponse> createZaloPayPayment(
+            @RequestBody @Valid CreatePaymentRequest request,
+            HttpServletRequest httpRequest) {
+        log.info("💳 Creating ZaloPay payment for order: {}", request.getOrderId());
+        
+        PaymentResponse paymentResponse = zaloPayService.createPayment(
+                request.getOrderId(),
+                httpRequest
+        );
+        
+        log.info("✅ ZaloPay payment URL created - Order: {}, Amount: {}, OrderUrl: {}", 
+                request.getOrderId(), paymentResponse.getAmount(), paymentResponse.getOrderUrl());
+        return ApiResponse.<PaymentResponse>builder()
+                .result(paymentResponse)
+                .build();
+    }
+
+    /**
+     * POST /payment/zalopay/callback
+     * Callback từ ZaloPay (server-to-server) sau khi trừ tiền user thành công
+     * ZaloPay sẽ POST JSON với các field: data, mac, type
+     *
+     * Yêu cầu response:
+     * {
+     *   "return_code": 1,           // 1 = thành công, 2 = trùng giao dịch, khác = lỗi
+     *   "return_message": "success" // mô tả
+     * }
+     *
+     * Lưu ý: Không bọc response trong ApiResponse, trả JSON raw theo format của ZaloPay.
+     */
+    @PostMapping("/zalopay/callback")
+    public Map<String, Object> zaloPayCallback(@RequestBody Map<String, Object> body) {
+        log.info("📞 ZaloPay callback received (server-to-server)");
+
+        boolean ok = zaloPayService.handleCallback(body);
+
+        Map<String, Object> resp = new HashMap<>();
+        if (ok) {
+            resp.put("return_code", 1);
+            resp.put("return_message", "success");
         } else {
-            log.warn("❌ IPN: Payment failed - Order: {}, Status: {}", 
-                    callbackResponse.getOrderId(), callbackResponse.getPaymentStatus());
+            resp.put("return_code", -1);
+            resp.put("return_message", "error");
+        }
+
+        return resp;
+    }
+    
+    /**
+     * GET /payment/zalopay/return
+     * Return callback từ ZaloPay sau khi thanh toán (user redirect về)
+     * ZaloPay sẽ redirect user về URL này bằng GET với query params chứa kết quả
+     * 
+     * Flow:
+     * 1. User thanh toán trên ZaloPay
+     * 2. ZaloPay redirect user về đây (GET) với query params
+     * 3. Backend parse query params và trả về JSON
+     * 4. Frontend có thể dùng GET /payment/status/{orderId} để check status chi tiết
+     * 
+     * Lưu ý: 
+     * - Việc cập nhật DB đã được xử lý bởi server-to-server callback (POST /payment/zalopay/callback)
+     * - Endpoint này chỉ để frontend biết kết quả và có thể redirect về trang kết quả
+     * 
+     * @param request HttpServletRequest chứa query params từ ZaloPay
+     * @param redirectUrl URL để redirect về frontend (optional, query param: ?redirectUrl=...)
+     * @return JSON response với thông tin kết quả thanh toán
+     */
+    @GetMapping("/zalopay/return")
+    public ResponseEntity<?> zaloPayReturn(
+            HttpServletRequest request,
+            @RequestParam(required = false) String redirectUrl) {
+        log.info("📞 ZaloPay return callback received (user redirect)");
+        
+        Map<String, Object> returnData = zaloPayService.handleReturnCallback(request);
+        
+        if (returnData == null) {
+            log.warn("❌ Failed to process ZaloPay return callback");
+            Map<String, Object> errorResp = new HashMap<>();
+            errorResp.put("code", 9999);
+            errorResp.put("message", "Failed to process return callback");
+            return ResponseEntity.ok(errorResp);
         }
         
-        return ApiResponse.<PaymentCallbackResponse>builder()
-                .result(callbackResponse)
+        // Nếu có redirectUrl, redirect về frontend với query params
+        if (redirectUrl != null && !redirectUrl.isEmpty()) {
+            String separator = redirectUrl.contains("?") ? "&" : "?";
+            String redirectWithParams = redirectUrl + separator + 
+                "appTransId=" + returnData.get("appTransId") +
+                "&status=" + returnData.get("status") +
+                "&success=" + returnData.get("success") +
+                "&amount=" + returnData.get("amount");
+            
+            log.info("🔄 Redirecting to frontend: {}", redirectWithParams);
+            return ResponseEntity.status(HttpStatus.FOUND)
+                .header("Location", redirectWithParams)
                 .build();
+        }
+        
+        // Trả về JSON để frontend xử lý
+        Map<String, Object> response = new HashMap<>();
+        response.put("code", 1000);
+        response.put("result", returnData);
+        response.put("message", "Return callback processed. Please check payment status using GET /payment/status/{orderId}");
+        
+        return ResponseEntity.ok(response);
     }
     
     /**

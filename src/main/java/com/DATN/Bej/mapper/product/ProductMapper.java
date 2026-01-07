@@ -23,6 +23,7 @@ public interface ProductMapper {
     ProductResponse toProductResponse(Product product);
     
     @Mapping(source = "variants", target = "variants")
+    @Mapping(source = "category.id", target = "categoryId")
     ProductDetailRes toProductDetailResponse(Product product);
     List<ProductResponse> toResponseList(List<Product> products);
 

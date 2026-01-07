@@ -62,6 +62,18 @@ public class UserManageService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED)));
     }
 
+
+    @PreAuthorize("hasRole('ADMIN')")
+    public UserResponse searchUserByPhoneNumber(String phoneNumber){
+        return userMapper.toUserResponse(userRepository.findByPhoneNumber(phoneNumber)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED)));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    public List<UserResponse> findByRole(List<String> roles){
+        return userRepository.findDistinctByRoles_NameIn(roles).stream().map(userMapper::toUserResponse).toList();
+    }
+
 }
 
 

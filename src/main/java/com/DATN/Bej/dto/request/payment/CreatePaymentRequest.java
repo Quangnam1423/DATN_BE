@@ -18,4 +18,3 @@ public class CreatePaymentRequest {
     @NotBlank(message = "Order ID is required")
     String orderId;  // ID của đơn hàng cần thanh toán
 }
-

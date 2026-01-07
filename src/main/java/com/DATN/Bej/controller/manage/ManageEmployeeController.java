@@ -16,7 +16,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-@RequestMapping("/users/manage")
+@RequestMapping("/manage/users")
 @Slf4j
 public class ManageEmployeeController {
 
@@ -45,6 +45,20 @@ public class ManageEmployeeController {
 //        System.out.println("Request Data: " + request);
         return ApiResponse.<UserResponse>builder()
                 .result(userManageService.updateUser(userId, request))
+                .build();
+    }
+
+    @GetMapping("/search")
+    ApiResponse<UserResponse> searchUserByPhoneNumber(@RequestParam String phoneNumber){
+        return ApiResponse.<UserResponse>builder()
+                .result(userManageService.searchUserByPhoneNumber(phoneNumber))
+                .build();
+    }
+
+    @GetMapping("/search/role")
+    ApiResponse<List<UserResponse>> searchUserByRole(@RequestParam List<String> roles){
+        return ApiResponse.<List<UserResponse>>builder()
+                .result(userManageService.findByRole(roles))
                 .build();
     }
 

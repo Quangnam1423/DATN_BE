@@ -15,8 +15,8 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, String> {
     @Query("SELECT oi.productA.id, SUM(oi.quantity) as totalSold, SUM(oi.price * oi.quantity) as totalRevenue " +
            "FROM OrderItem oi " +
            "WHERE oi.order.orderAt BETWEEN :startDate AND :endDate " +
-           "AND oi.order.status IN (2, 5) " +
-           "AND oi.order.type = 0 " +
+//           "AND oi.order.status IN (2, 5) " +
+//           "AND oi.order.type = 0 " +
            "GROUP BY oi.productA.id " +
            "ORDER BY totalSold DESC")
     List<Object[]> findTopProductsByDateRange(@Param("startDate") LocalDate startDate, 

@@ -2,13 +2,9 @@ package com.DATN.Bej.listener;
 
 import com.DATN.Bej.dto.ApiNotificationRequest;
 import com.DATN.Bej.enums.NotificationType;
-import com.DATN.Bej.enums.Role;
-import com.DATN.Bej.entity.identity.User;
 import com.DATN.Bej.event.BroadcastNotificationEvent;
 import com.DATN.Bej.event.NotificationSendEvent;
-import com.DATN.Bej.event.OrderCreatedEvent;
 import com.DATN.Bej.event.OrderStatusUpdateEvent;
-import com.DATN.Bej.repository.UserRepository;
 import com.DATN.Bej.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +14,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -31,7 +26,6 @@ import java.util.Map;
 public class NotificationEventListener {
 
     private final NotificationService notificationService;
-    private final UserRepository userRepository;
 
     /**
      * Xử lý sự kiện gửi thông báo cá nhân

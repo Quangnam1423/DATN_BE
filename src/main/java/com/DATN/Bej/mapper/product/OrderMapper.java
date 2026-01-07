@@ -1,5 +1,6 @@
 package com.DATN.Bej.mapper.product;
 
+import com.DATN.Bej.dto.request.cartRequest.CreateOrderRequest;
 import com.DATN.Bej.dto.request.cartRequest.OrderItemRequest;
 import com.DATN.Bej.dto.request.cartRequest.OrderRequest;
 import com.DATN.Bej.dto.response.cart.OrderDetailsResponse;
@@ -17,6 +18,10 @@ public interface OrderMapper {
 
     @Mapping(target = "orderItems", ignore = true)
     Orders toOrder(OrderRequest request);
+    @Mapping(target = "orderItems", ignore = true)
+    @Mapping(target = "user", ignore = true)
+    Orders toOrder(CreateOrderRequest request);
+
     @Mapping(target = "userName", source = "user.fullName")
     OrdersResponse toOrdersResponse(Orders orders);
     @Mapping(target = "userName", source = "user.fullName")

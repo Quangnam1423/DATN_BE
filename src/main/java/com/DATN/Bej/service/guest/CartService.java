@@ -10,7 +10,6 @@ import com.DATN.Bej.entity.cart.OrderNote;
 import com.DATN.Bej.entity.cart.Orders;
 import com.DATN.Bej.entity.identity.User;
 import com.DATN.Bej.entity.product.ProductAttribute;
-import com.DATN.Bej.event.OrderCreatedEvent;
 import com.DATN.Bej.exception.AppException;
 import com.DATN.Bej.exception.ErrorCode;
 import com.DATN.Bej.mapper.product.CartItemMapper;
@@ -24,7 +23,6 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -32,6 +30,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -47,7 +46,6 @@ public class CartService {
 
     OrderMapper orderMapper;
     CartItemMapper cartItemMapper;
-    ApplicationEventPublisher eventPublisher;
 
     public CartItemResponse addToCart(String attId){
         var context = SecurityContextHolder.getContext();
@@ -166,41 +164,14 @@ public class CartService {
 
         List<OrderItem> orderItems = new ArrayList<>();
         for (var itemReq : request.getItems()) {
-            log.info("Processing cart item - CartItemId: {}, ProductAttId: {}, Quantity: {}", 
-                    itemReq.getCartItemId(), itemReq.getProductAttId(), itemReq.getQuantity());
-            
-            // Kiểm tra ProductAttribute tồn tại
+            log.info(itemReq.getCartItemId());
             ProductAttribute productAtt = productAttributeRepository
                     .findById(itemReq.getProductAttId())
-                    .orElseThrow(() -> {
-                        log.error("❌ ProductAttribute not found - ProductAttId: {}", itemReq.getProductAttId());
-                        return new AppException(ErrorCode.INVALID_KEY);
-                    });
-            
-            log.info("✅ ProductAttribute found - ID: {}, Name: {}, Price: {}", 
-                    productAtt.getId(), 
-                    productAtt.getVariant().getProduct().getName(),
-                    productAtt.getFinalPrice());
-            
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
             OrderItem orderItem = orderMapper.toOrderItem(itemReq);
             orderItem.setProductA(productAtt);
             orderItem.setOrder(orders);
             orderItem.setPrice(productAtt.getFinalPrice());
-            
-            // Kiểm tra CartItem tồn tại và thuộc về user
-            CartItem cartItem = cartItemRepository.findById(itemReq.getCartItemId())
-                    .orElseThrow(() -> {
-                        log.error("❌ CartItem not found - CartItemId: {}", itemReq.getCartItemId());
-                        return new AppException(ErrorCode.INVALID_KEY);
-                    });
-            
-            // Kiểm tra user sở hữu cart item
-            if (!cartItem.getUser().getId().equals(user.getId())) {
-                log.error("❌ CartItem does not belong to user - CartItemId: {}, UserId: {}, CartItemOwnerId: {}", 
-                        itemReq.getCartItemId(), user.getId(), cartItem.getUser().getId());
-                throw new AppException(ErrorCode.UNAUTHENTICATED);
-            }
-            
             cartItemRepository.deleteById(itemReq.getCartItemId());
 
 //            productAttributeRepository.increaseSoldQuantity(UUID.fromString(productAtt.getId()), orderItem.getQuantity());
@@ -294,6 +265,10 @@ public class CartService {
     //  ======================================================================================
     public List<OrdersResponse> getAllOrders(){
         return ordersRepository.findAllByOrderByOrderAtDesc().stream().map(orderMapper::toOrdersResponse).toList();
+    }
+
+    public List<OrdersResponse> getOrdersByType(int type){
+        return ordersRepository.findDistinctByTypeOrderByOrderAtDesc(type).stream().map(orderMapper::toOrdersResponse).toList();
     }
 
     public OrderDetailsResponse getOrderDetails(String orderId){

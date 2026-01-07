@@ -20,5 +20,3 @@ public class PaymentStatusResponse {
     Double totalPrice;
     String message;
 }
-
-
