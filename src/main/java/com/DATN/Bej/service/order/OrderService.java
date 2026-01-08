@@ -15,6 +15,7 @@ import com.DATN.Bej.entity.cart.OrderNote;
 import com.DATN.Bej.entity.cart.Orders;
 import com.DATN.Bej.entity.identity.User;
 import com.DATN.Bej.entity.product.ProductAttribute;
+import com.DATN.Bej.event.OrderCreatedEvent;
 import com.DATN.Bej.event.OrderStatusUpdateEvent;
 import com.DATN.Bej.exception.AppException;
 import com.DATN.Bej.exception.ErrorCode;
@@ -577,6 +578,20 @@ public class OrderService {
         orders.setOrderAt(LocalDate.now());
 
         Orders saved = orderRepository.save(orders);
+        
+        // Publish event để gửi thông báo cho user, admin và staff
+        OrderCreatedEvent orderCreatedEvent = new OrderCreatedEvent(
+                saved.getId(),
+                user.getId(),
+                saved.getType(),
+                saved.getTotalPrice(),
+                saved.getDescription()
+        );
+        eventPublisher.publishEvent(orderCreatedEvent);
+        
+        log.info("✅ Order created, event published - Order: {}, User: {}, Type: {}", 
+                saved.getId(), user.getId(), saved.getType());
+        
         return orderMapper.toOrderDetailsResponse(saved);
     }
 }

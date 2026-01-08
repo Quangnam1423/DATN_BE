@@ -10,6 +10,7 @@ import com.DATN.Bej.entity.cart.OrderNote;
 import com.DATN.Bej.entity.cart.Orders;
 import com.DATN.Bej.entity.identity.User;
 import com.DATN.Bej.entity.product.ProductAttribute;
+import com.DATN.Bej.event.OrderCreatedEvent;
 import com.DATN.Bej.exception.AppException;
 import com.DATN.Bej.exception.ErrorCode;
 import com.DATN.Bej.mapper.product.CartItemMapper;
@@ -23,6 +24,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -46,6 +48,7 @@ public class CartService {
 
     OrderMapper orderMapper;
     CartItemMapper cartItemMapper;
+    ApplicationEventPublisher eventPublisher;
 
     public CartItemResponse addToCart(String attId){
         var context = SecurityContextHolder.getContext();
@@ -187,6 +190,20 @@ public class CartService {
         orders.setOrderAt(LocalDate.now());
 
         Orders saved = ordersRepository.save(orders);
+        
+        // Publish event để gửi thông báo cho user, admin và staff
+        OrderCreatedEvent orderCreatedEvent = new OrderCreatedEvent(
+                saved.getId(),
+                user.getId(),
+                saved.getType(),
+                saved.getTotalPrice(),
+                saved.getDescription()
+        );
+        eventPublisher.publishEvent(orderCreatedEvent);
+        
+        log.info("✅ Order created, event published - Order: {}, User: {}, Type: {}", 
+                saved.getId(), user.getId(), saved.getType());
+        
         return orderMapper.toOrderDetailsResponse(saved);
     }
 

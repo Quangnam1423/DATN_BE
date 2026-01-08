@@ -1,11 +1,11 @@
-package com.DATN.Bej.config; // (Hoặc package của bạn)
+package com.DATN.Bej.config;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -35,6 +35,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 .setSystemPasscode(password);
 
         registry.setApplicationDestinationPrefixes("/app");
+        // Cấu hình user destination prefix để convertAndSendToUser hoạt động với RabbitMQ
+        registry.setUserDestinationPrefix("/user");
     }
 
     @Override

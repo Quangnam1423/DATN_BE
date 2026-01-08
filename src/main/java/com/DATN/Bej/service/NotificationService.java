@@ -82,10 +82,19 @@ public class NotificationService {
                 Instant.now(),
                 request.metadata()
             );
+            
+            // Gửi qua user-specific queue (yêu cầu client subscribe to /user/{userId}/queue/notifications)
+            // Với RabbitMQ STOMP broker, userId cần khớp với principal name trong WebSocket session
             messagingTemplate.convertAndSendToUser(userId, USER_QUEUE, payload);
-            log.info("✅ Notification sent via WebSocket to user: {}", userId);
+            
+            // Gửi thêm qua topic-based destination để đảm bảo nhận được (fallback)
+            // Client có thể subscribe to /topic/notifications/{userId}
+            String topicDestination = "/topic/notifications/" + userId;
+            messagingTemplate.convertAndSend(topicDestination, payload);
+            
+            log.info("✅ Notification sent via WebSocket to user: {} (both user queue and topic)", userId);
         } catch (Exception e) {
-            log.error("❌ Failed to send notification via WebSocket to user {}: {}", userId, e.getMessage());
+            log.error("❌ Failed to send notification via WebSocket to user {}: {}", userId, e.getMessage(), e);
         }
 
         // 3. Gửi qua Firebase (nếu user có FCM token)
