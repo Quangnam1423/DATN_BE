@@ -3,12 +3,14 @@ package com.DATN.Bej.service.payment;
 import com.DATN.Bej.config.ZaloPayConfig;
 import com.DATN.Bej.dto.response.payment.PaymentResponse;
 import com.DATN.Bej.entity.cart.Orders;
+import com.DATN.Bej.event.OrderStatusUpdateEvent;
 import com.DATN.Bej.exception.AppException;
 import com.DATN.Bej.exception.ErrorCode;
 import com.DATN.Bej.repository.product.OrderRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -28,6 +30,7 @@ public class ZaloPayService {
 
     private final ZaloPayConfig zaloPayConfig;
     private final OrderRepository orderRepository;
+    private final ApplicationEventPublisher eventPublisher;
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -237,9 +240,26 @@ public class ZaloPayService {
             Orders order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
+            int oldStatus = order.getStatus();
             // Giả định callback này chỉ gửi khi thu tiền thành công
-            order.setStatus(2); // Đã thanh toán
+            int newStatus = 2; // Đã thanh toán
+            order.setStatus(newStatus);
             orderRepository.save(order);
+            
+            // Publish event để gửi notification
+            if (oldStatus != newStatus) {
+                OrderStatusUpdateEvent statusUpdateEvent = new OrderStatusUpdateEvent(
+                        orderId,
+                        order.getUser().getId(),
+                        oldStatus,
+                        newStatus,
+                        getStatusName(newStatus),
+                        "Thanh toán thành công qua ZaloPay"
+                );
+                eventPublisher.publishEvent(statusUpdateEvent);
+                log.info("✅ ZaloPay payment status update event published - Order: {}, Status: {} -> {}", 
+                        orderId, oldStatus, newStatus);
+            }
 
             log.info("✅ ZaloPay callback processed - Order: {}, AppTransId: {}, Amount: {}",
                     orderId, appTransId, amount);
@@ -308,10 +328,24 @@ public class ZaloPayService {
                     
                     if (order != null && order.getStatus() != 2) {
                         // Chỉ update nếu chưa được update bởi server callback (status != 2)
-                        order.setStatus(2); // Đã thanh toán
+                        int oldStatus = order.getStatus();
+                        int newStatus = 2; // Đã thanh toán
+                        order.setStatus(newStatus);
                         orderRepository.save(order);
-                        log.info("✅ ZaloPay return callback updated order status - Order: {}, AppTransId: {}, Status: 2", 
-                                orderId, appTransId);
+                        
+                        // Publish event để gửi notification
+                        OrderStatusUpdateEvent statusUpdateEvent = new OrderStatusUpdateEvent(
+                                orderId,
+                                order.getUser().getId(),
+                                oldStatus,
+                                newStatus,
+                                getStatusName(newStatus),
+                                "Thanh toán thành công qua ZaloPay"
+                        );
+                        eventPublisher.publishEvent(statusUpdateEvent);
+                        
+                        log.info("✅ ZaloPay return callback updated order status - Order: {}, AppTransId: {}, Status: {} -> {}", 
+                                orderId, appTransId, oldStatus, newStatus);
                     } else if (order != null && order.getStatus() == 2) {
                         log.info("ℹ️ ZaloPay return callback: Order already updated by server callback - Order: {}, Status: 2", 
                                 orderId);
@@ -468,6 +502,21 @@ public class ZaloPayService {
             log.error("Error creating MAC", e);
             throw new RuntimeException("Failed to create MAC", e);
         }
+    }
+    
+    /**
+     * Lấy tên trạng thái đơn hàng
+     */
+    private String getStatusName(int status) {
+        return switch (status) {
+            case 0 -> "Chờ xử lý";
+            case 1 -> "Đã xác nhận";
+            case 2 -> "Đã thanh toán";
+            case 3 -> "Thanh toán thất bại";
+            case 4 -> "Đang giao hàng";
+            case 5 -> "Đã hoàn thành";
+            default -> "Không xác định";
+        };
     }
     
 }

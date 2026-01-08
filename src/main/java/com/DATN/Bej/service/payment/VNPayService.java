@@ -4,12 +4,14 @@ import com.DATN.Bej.config.VNPayConfig;
 import com.DATN.Bej.dto.response.payment.PaymentCallbackResponse;
 import com.DATN.Bej.dto.response.payment.PaymentResponse;
 import com.DATN.Bej.entity.cart.Orders;
+import com.DATN.Bej.event.OrderStatusUpdateEvent;
 import com.DATN.Bej.exception.AppException;
 import com.DATN.Bej.exception.ErrorCode;
 import com.DATN.Bej.repository.product.OrderRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,7 @@ public class VNPayService {
 
     private final VNPayConfig vnPayConfig;
     private final OrderRepository orderRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public String createOrder(int total, String orderInfo, String returnBaseUrl, HttpServletRequest request) {
         String vnp_Version = "2.1.0";
@@ -152,17 +155,21 @@ public class VNPayService {
         Orders order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
         
+        int oldStatus = order.getStatus();
         boolean success = (paymentStatus == 1);
         String message;
+        int newStatus;
         
         if (success) {
             // Thanh toán thành công: status = 2 (đã thanh toán)
-            order.setStatus(2);
+            newStatus = 2;
+            order.setStatus(newStatus);
             message = "Payment successful";
             log.info("✅ Payment successful - Order: {}, Transaction: {}", orderId, transactionId);
         } else if (paymentStatus == 0) {
             // Thanh toán thất bại: status = 3 (thanh toán thất bại)
-            order.setStatus(3);
+            newStatus = 3;
+            order.setStatus(newStatus);
             message = "Payment failed";
             log.warn("❌ Payment failed - Order: {}", orderId);
         } else {
@@ -183,6 +190,21 @@ public class VNPayService {
         }
         
         orderRepository.save(order);
+        
+        // Publish event để gửi notification
+        if (oldStatus != newStatus) {
+            OrderStatusUpdateEvent statusUpdateEvent = new OrderStatusUpdateEvent(
+                    orderId,
+                    order.getUser().getId(),
+                    oldStatus,
+                    newStatus,
+                    getStatusName(newStatus),
+                    message
+            );
+            eventPublisher.publishEvent(statusUpdateEvent);
+            log.info("✅ Payment status update event published - Order: {}, Status: {} -> {}", 
+                    orderId, oldStatus, newStatus);
+        }
         
         return PaymentCallbackResponse.builder()
                 .orderId(orderId)
@@ -277,5 +299,20 @@ public class VNPayService {
         
         // Option 2: Trả về paymentUrl để client tự generate QR code
         return paymentUrl;
+    }
+    
+    /**
+     * Lấy tên trạng thái đơn hàng
+     */
+    private String getStatusName(int status) {
+        return switch (status) {
+            case 0 -> "Chờ xử lý";
+            case 1 -> "Đã xác nhận";
+            case 2 -> "Đã thanh toán";
+            case 3 -> "Thanh toán thất bại";
+            case 4 -> "Đang giao hàng";
+            case 5 -> "Đã hoàn thành";
+            default -> "Không xác định";
+        };
     }
 }
