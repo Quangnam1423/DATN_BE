@@ -32,7 +32,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 .setClientLogin(username)
                 .setClientPasscode(password)
                 .setSystemLogin(username)
-                .setSystemPasscode(password);
+                .setSystemPasscode(password)
+                // Cấu hình để RabbitMQ tự động tạo exchanges và queues khi cần
+                .setAutoStartup(true)
+                // Cho phép dynamic destinations
+                .setVirtualHost("/");
 
         registry.setApplicationDestinationPrefixes("/app");
         // Cấu hình user destination prefix để convertAndSendToUser hoạt động với RabbitMQ
@@ -41,6 +45,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/ws").withSockJS();
+        registry.addEndpoint("/ws")
+                // Cho phép các origin frontend (localhost dev) kết nối SockJS
+                .setAllowedOriginPatterns(
+                        "http://localhost:5173",
+                        "http://localhost:3000",
+                        "http://localhost:8080",
+                        "*"
+                )
+                .withSockJS();
     }
 }

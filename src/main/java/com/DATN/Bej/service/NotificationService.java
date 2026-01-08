@@ -83,16 +83,14 @@ public class NotificationService {
                 request.metadata()
             );
             
-            // Gửi qua user-specific queue (yêu cầu client subscribe to /user/{userId}/queue/notifications)
-            // Với RabbitMQ STOMP broker, userId cần khớp với principal name trong WebSocket session
-            messagingTemplate.convertAndSendToUser(userId, USER_QUEUE, payload);
+            // Gửi qua queue-based destination (RabbitMQ STOMP broker yêu cầu queue name cụ thể)
+            // RabbitMQ STOMP broker không tự động tạo topic exchange cho dynamic destinations
+            // Sử dụng queue với tên cụ thể: /queue/notifications.{userId}
+            // Client cần subscribe to /queue/notifications.{userId}
+            String queueDestination = "/queue/notifications." + userId;
+            messagingTemplate.convertAndSend(queueDestination, payload);
             
-            // Gửi thêm qua topic-based destination để đảm bảo nhận được (fallback)
-            // Client có thể subscribe to /topic/notifications/{userId}
-            String topicDestination = "/topic/notifications/" + userId;
-            messagingTemplate.convertAndSend(topicDestination, payload);
-            
-            log.info("✅ Notification sent via WebSocket to user: {} (both user queue and topic)", userId);
+            log.info("✅ Notification sent via WebSocket to user: {} (queue: {})", userId, queueDestination);
         } catch (Exception e) {
             log.error("❌ Failed to send notification via WebSocket to user {}: {}", userId, e.getMessage(), e);
         }

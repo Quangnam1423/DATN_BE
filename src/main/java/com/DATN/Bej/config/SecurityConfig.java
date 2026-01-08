@@ -8,6 +8,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
@@ -36,6 +37,7 @@ public class SecurityConfig {
      * Đặt order = 1 để chạy TRƯỚC filterChain chính
      */
     @Bean
+    @Order(1)
     public SecurityFilterChain publicFilterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity
                 .securityMatcher("/upload/**", "/images/**", "/home/**", "/banners/**", 
@@ -54,6 +56,7 @@ public class SecurityConfig {
      * Đặt order = 2 để chạy SAU publicFilterChain
      */
     @Bean
+    @Order(2)
     public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity
                 .cors(Customizer.withDefaults())
